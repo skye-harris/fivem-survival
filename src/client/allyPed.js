@@ -15,7 +15,8 @@ class AllyPed {
                 SetPedAsGroupMember(this.allyPed, GetPedGroupIndex(playerPedId));
                 SetPedRelationshipGroupHash(this.allyPed, GetHashKey("PLAYER"));
 
-                GiveWeaponToPed(this.allyPed, GetHashKey("WEAPON_PISTOL"), 250, false, true);
+                // todo: set up a pool of weapons to choose from
+                GiveWeaponToPed(this.allyPed, GetHashKey("WEAPON_ASSAULTRIFLE"), 10000, false, true);
 
                 SetPedCombatAttributes(this.allyPed, 46, true); // Can fight armed peds
                 SetPedCombatAbility(this.allyPed, 2); // Set combat ability (0: poor, 1: average, 2: professional)
@@ -23,6 +24,15 @@ class AllyPed {
                 SetPedFleeAttributes(this.allyPed, 0, false); // Will not flee
                 //SetPedAsCop(allyPed, true); // Gives police-like behavior for hostile peds
 
+                // todo: If player is in a vehicle, check for free seats, and set the ally into the vehicle if there is room
+                // const playerVehicle = GetVehiclePedIsIn(playerPedId, false);
+                // if (playerVehicle && IsAnyVehicleSeatEmpty(playerVehicle)) {
+                //     this.enterVehicle(playerVehicle, -1, 10000).catch(() => {
+                //         this.followPlayerOnFoot();
+                //     });
+                // } else {
+                //     this.followPlayerOnFoot();
+                // }
                 this.followPlayerOnFoot();
 
                 SetModelAsNoLongerNeeded(modelHash);
@@ -37,6 +47,7 @@ class AllyPed {
         SetPedKeepTask(this.allyPed, true);
     }
 
+    // Exit the current vehicle. Promise resolves after 1sec (an arbitrary delay)
     exitVehicle() {
         return new Promise((resolve,reject) => {
             TaskLeaveAnyVehicle(this.allyPed, 0, 0);
@@ -47,6 +58,7 @@ class AllyPed {
         })
     }
 
+    // Enter the specified vehicle. Checks if we managed to do so and resolves, and rejects if we couldnt get in by the timeout
     enterVehicle(vehicle, seat, timeout= 10000) {
         return new Promise((resolve,reject) => {
             TaskEnterVehicle(this.allyPed, vehicle, timeout, seat, 2, 1, 0);
@@ -69,13 +81,15 @@ class AllyPed {
         });
     }
 
+    // Attack the target. Promise resolves if the target dies or ceases to exist, or we have otherwise left combat (eg we are too far away)
     attackTarget(target) {
         return new Promise((resolve,reject) => {
             TaskCombatPed(this.allyPed, target, 0, 16);
             SetPedKeepTask(this.allyPed, true);
 
             const intervalTicker = setInterval(() => {
-                if (!IsPedInCombat(this.allyPed, -1) || !DoesEntityExist(target) || IsPedDeadOrDying(target, true)) {
+                // If we are no longer in combat, our target is dead or doesnt exist, or *WE* no longer exist... we clear our interval
+                if (!IsPedInCombat(this.allyPed, -1) || !DoesEntityExist(target) || IsPedDeadOrDying(target, true) || allies.indexOf(this) === -1) {
                     clearInterval(intervalTicker);
 
                     resolve();
@@ -88,10 +102,11 @@ class AllyPed {
 let allies = [];
 
 export default function initAllyPed() {
-
     let playerVehicle = IsPedInAnyVehicle(PlayerPedId(), true);
 
     RegisterCommand("spawnally", (source, args) => {
+        // todo: select model from a pool
+
         allies.push(new AllyPed());
     }, false);
 
