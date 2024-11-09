@@ -10,8 +10,16 @@ export async function loadModel(modelHash) {
 
         RequestModel(modelHash)
 
+        let timeout = 5000;
         while (!HasModelLoaded(modelHash)) {
+            timeout -= 10;
             Wait(10);
+
+            if (!timeout) {
+                reject(new Error("Failed to load model after 1000ms"));
+
+                return;
+            }
         }
 
         resolve(modelHash);
