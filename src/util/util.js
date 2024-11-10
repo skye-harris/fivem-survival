@@ -69,10 +69,21 @@ export function distance3D(x1,y1,z1, x2,y2,z2) {
     ));
 }
 
+export function distanceBetweenEntities(e1,e2) {
+    const coords1 = GetEntityCoords(e1);
+    const coords2 = GetEntityCoords(e2);
+
+    return GetDistanceBetweenCoords(coords1[0],coords1[1],coords1[2],coords2[0],coords2[1],coords2[2], true);
+}
+
 export function getPlayerAimTarget() {
     const [aiming, targetPed] = GetEntityPlayerIsFreeAimingAt(PlayerId());
 
     return aiming ? targetPed : false;
+}
+
+export function isPedAnAlly(ped, ours = false) {
+    return GetPedRelationshipGroupHash(ped) === GetHashKey('PLAYER') && !IsPedAPlayer(ped) && (!ours || NetworkGetEntityOwner(ped) === PlayerId());
 }
 
 export function getFreeVehicleSeats(vehicle, forceDriverAvailable = false) {
@@ -83,16 +94,23 @@ export function getFreeVehicleSeats(vehicle, forceDriverAvailable = false) {
         result.push(-1);
     }
 
-    for (let seat = -1; seat < vehicleSeats; seat++) {
-        if (IsVehicleSeatFree(vehicle, seat)) {
-            result.push(seat);
+    if (vehicleSeats) {
+        for (let seat = -1; seat < vehicleSeats; seat++) {
+            if (IsVehicleSeatFree(vehicle, seat)) {
+                result.push(seat);
+            } else {
+                const seatedPed = GetPedInVehicleSeat(vehicle, seat);
+                if (!isPedAnAlly(seatedPed, false) && !IsPedAPlayer(seatedPed)) {
+                    result.push(seat);
+                }
+            }
         }
     }
 
     return result.filter((ele,index) => result.indexOf(ele) === index);
 }
 
-export function findNearbyFreeVehicle(ped) {
+export function findNearbyFreeVehicles(ped, maxDistance = 30) {
     const coords = GetEntityCoords(ped, false);
     const allVehicles = GetGamePool('CVehicle');
     let vehicles = [];
@@ -100,15 +118,18 @@ export function findNearbyFreeVehicle(ped) {
     for (let vehicle of allVehicles) {
         const driverPed = GetPedInVehicleSeat(vehicle,-1);
 
-        if (IsPedAPlayer(driverPed)) {
+        // Is this driver another player? Lets not select their vehicle
+        if (IsPedAPlayer(driverPed) && driverPed !== PlayerPedId()) {
             continue;
         }
 
+        // Is the vehicle moving? Lets ignore it
         if (GetEntitySpeed(vehicle) > 1) {
             continue;
         }
 
-        if (GetPedRelationshipGroupHash(driverPed) === GetHashKey('PLAYER')) {
+        // If the driver an ally ped thats owned by another player, skip it also
+        if (GetPedRelationshipGroupHash(driverPed) === GetHashKey('PLAYER') && NetworkGetEntityOwner(driverPed) !== PlayerId()) {
             continue;
         }
 
@@ -119,8 +140,8 @@ export function findNearbyFreeVehicle(ped) {
         });
     }
 
-    vehicles = vehicles.filter((veh) => veh.distance < 30);
+    vehicles = vehicles.filter((veh) => veh.distance <= maxDistance);
     vehicles.sort((a,b) => a.distance - b.distance);
 
-    return vehicles.length ? vehicles[0] : null;
+    return vehicles.map((vehicle) => vehicle.entity);
 }
