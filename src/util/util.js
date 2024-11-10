@@ -145,3 +145,7 @@ export function findNearbyFreeVehicles(ped, maxDistance = 30) {
 
     return vehicles.map((vehicle) => vehicle.entity);
 }
+
+export function debugChat(message) {
+    sendChat(message);
+}

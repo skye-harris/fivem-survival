@@ -1,13 +1,24 @@
-import {findNearbyFreeVehicles, getFreeVehicleSeats, getPlayerAimTarget, isPedAnAlly, loadModel, sendChat, sleep, throttle} from "../util/util";
+import {debugChat, findNearbyFreeVehicles, getFreeVehicleSeats, getPlayerAimTarget, isPedAnAlly, loadModel, sendChat, sleep, throttle} from "../util/util";
 import PedestrianHashes from "../util/PedestrianHashes";
 
 const ALLY_MAX_HEALTH = 2000;
+const ALLY_LIMIT = 8;
+
+const ThinkStates = {
+    "None": -1,
+    "FollowPlayerOnFoot": "FollowPlayerOnFoot",
+    "FollowPlayerInVehicle": "FollowPlayerInVehicle",
+    "EnterVehicle": "EnterVehicle",
+    "ExitVehicle": "ExitVehicle",
+    "AimAtTarget": "AimAtTarget",
+}
 
 class AllyPed {
     constructor() {
         this.allyPed = 0;
         this.vehicleSeat = [0,0]; // [vehicle,seat]
         this.blip = 0;
+        this.thinkState = ThinkStates.FollowPlayerOnFoot;
 
         const pedModels = Object.values(PedestrianHashes);
         const pedModel = pedModels[Math.round(Math.random() * (pedModels.length - 1))];
@@ -71,39 +82,52 @@ class AllyPed {
             return;
         }
 
-        const playerId = PlayerId();
         const playerPed = PlayerPedId();
-        const playerLocation = GetEntityCoords(playerPed, false);
         const playerVehicle = GetVehiclePedIsIn(playerPed, false);
         const pedVehicle = this.vehicleSeat[0];
+        const nowVehicle = GetVehiclePedIsIn(this.allyPed, false);
+        const playerFreeAimTarget = getPlayerAimTarget();
 
         // Ally is currently out of combat
         if (playerVehicle && !pedVehicle) {
-            const findVehicle = this.findVehicleToEnter();
-            if (findVehicle) {
-                return this.enterVehicle(findVehicle[0],findVehicle[1]);
+            if (this.thinkState !== ThinkStates.EnterVehicle) {
+                const findVehicle = this.findVehicleToEnter();
+                if (findVehicle) {
+                    debugChat(`found vehicle ${findVehicle[0]} and seat ${findVehicle[1]}`)
+                    return this.enterVehicle(findVehicle[0], findVehicle[1])
+                               .then(() => {
+                                   this.think();
+                               })
+                               .catch((err) => {
+                                   debugChat(err.message);
+                                   this.thinkState = ThinkStates.None;
+                               });
+                } else {
+                    debugChat('No vehicle')
+                }
             }
-        } else if (!playerVehicle && pedVehicle) {
+        } else if (!playerVehicle && nowVehicle && this.thinkState !== ThinkStates.ExitVehicle) {
             // exit vehicle
-            return this.exitVehicle();
-        } else if (playerVehicle && pedVehicle) {
+            return this.exitVehicle().then(() => this.followPlayerOnFoot());
+        } else if (playerVehicle && nowVehicle && this.thinkState !== ThinkStates.FollowPlayerInVehicle) {
             if (this.vehicleSeat[1] === -1) {
                 return this.followPlayerInVehicle(2000);
             }
-        } else if (!playerVehicle && !pedVehicle) {
-            const playerFreeAimTarget = getPlayerAimTarget();
-
-            if (playerFreeAimTarget) {
-                return this.aimAtTargetWithPlayer(playerFreeAimTarget);
-            }
-
-            return this.followPlayerOnFoot();
+        } else if (!playerVehicle && !pedVehicle && playerFreeAimTarget && this.thinkState !== `${ThinkStates.AimAtTarget}:${playerFreeAimTarget}`) {
+            return this.aimAtTargetWithPlayer(playerFreeAimTarget);
+        } else if (this.thinkState !== ThinkStates.FollowPlayerOnFoot) {
+            return this.followPlayerOnFoot;
+        } else {
+            sendChat('unknown ally state')
         }
 
         return sleep(1000).then(() => this.think());
     }
 
     followPlayerOnFoot(timeout = 1000) {
+        debugChat(`Ally ${this.allyPed} followPlayerOnFoot`);
+        this.thinkState = ThinkStates.FollowPlayerOnFoot;
+
         return new Promise(async (resolve,reject) => {
             TaskFollowToOffsetOfEntity(this.allyPed, PlayerPedId(), 0, -2, 0, 5.0, -1, 1.0, true);
             SetPedKeepTask(this.allyPed, true);
@@ -115,6 +139,9 @@ class AllyPed {
     }
 
     followPlayerInVehicle(timeout = 1000) {
+        debugChat(`Ally ${this.allyPed} followPlayerInVehicle`)
+        this.thinkState = ThinkStates.FollowPlayerInVehicle;
+
         return new Promise(async (resolve,reject) => {
             TaskVehicleFollow(this.allyPed, this.vehicleSeat[0], PlayerPedId(), 100, 1074528293, 5);
 
@@ -125,15 +152,22 @@ class AllyPed {
     }
 
     findVehicleToEnter() {
+        debugChat(`Ally ${this.allyPed} findVehicleToEnter`)
         const nearbyVehicles = findNearbyFreeVehicles(this.allyPed, 30);
-        for (let vehicle of nearbyVehicles) {
-            const seats = getFreeVehicleSeats(vehicle, false);
-            for (let seat of seats) {
-                const seatAlly = getAllyUsingThisVehicleSeat(vehicle,seat);
+        debugChat(nearbyVehicles);
 
-                if (!seatAlly || seatAlly === this.allyPed) {
-                    return [vehicle,seat];
+        for (let vehicle of nearbyVehicles) {
+            try {
+                const seats = GetVehicleModelNumberOfSeats(GetEntityModel(vehicle));//getFreeVehicleSeats(vehicle, false);
+                for (let seat = -1; seat < seats-1; seat++) {
+                    const seatAlly = getAllyUsingThisVehicleSeat(vehicle, seat);
+
+                    if ((!seatAlly || seatAlly === this.allyPed) && GetPedInVehicleSeat(vehicle,seat) !== PlayerPedId()) {
+                        return [vehicle, seat];
+                    }
                 }
+            } catch (err) {
+                debugChat(err.message)
             }
         }
 
@@ -142,6 +176,9 @@ class AllyPed {
 
     // Exit the current vehicle. Promise resolves after 1sec (an arbitrary delay)
     exitVehicle() {
+        debugChat(`Ally ${this.allyPed} exitVehicle`)
+        this.thinkState = ThinkStates.ExitVehicle;
+
         return new Promise((resolve, reject) => {
             TaskLeaveAnyVehicle(this.allyPed, 0, 0);
 
@@ -156,8 +193,10 @@ class AllyPed {
     }
 
     // Enter the specified vehicle. Checks if we managed to do so and resolves, and rejects if we couldnt get in by the timeout
-    enterVehicle(vehicle, seat, timeout = 5000) {
+    enterVehicle(vehicle, seat, timeout = 3000) {
+        debugChat(`Ally ${this.allyPed} enterVehicle`)
         this.vehicleSeat = [vehicle,seat];
+        this.thinkState = ThinkStates.EnterVehicle;
 
         return new Promise((resolve, reject) => {
             TaskEnterVehicle(this.allyPed, vehicle, timeout, seat, 2, 1, 0);
@@ -175,18 +214,18 @@ class AllyPed {
                 if (timer >= timeout) {
                     clearInterval(intervalTicker);
                     this.vehicleSeat = [0,0];
-                    //this.followPlayerOnFoot();
 
                     reject(new Error('Did not enter vehicle in time'));
                 }
             }, Math.min(timeout, 1000));
-        }).finally(() => {
-            this.think();
-        });
+        })
     }
 
     // Aim at target with player, stop when player does
     aimAtTargetWithPlayer(target) {
+        this.thinkState = `${ThinkStates.AimAtTarget}:${target}`;
+
+        debugChat(`Ally ${this.allyPed} aimAtTargetWithPlayer`)
         return new Promise((resolve, reject) => {
             TaskAimGunAtEntity(this.allyPed, target, -1, false);
 
@@ -218,6 +257,7 @@ class AllyPed {
 
     // Attack the target. Promise resolves if the target dies or ceases to exist, or we have otherwise left combat (eg we are too far away)
     attackTarget(target) {
+        debugChat(`Ally ${this.allyPed} attackTarget`)
         return new Promise((resolve, reject) => {
             TaskCombatPed(this.allyPed, target, 0, 16);
 
@@ -245,13 +285,14 @@ function getAllyUsingThisVehicleSeat(vehicle,seat) {
 
 function cleanupLostAllies() {
     const allPeds = GetGamePool('CPed');
-    const playerId = PlayerId();
 
     for (let ped of allPeds) {
         if (isPedAnAlly(ped, true)) {
             SetPedAsNoLongerNeeded(ped);
             SetPedRelationshipGroupHash(ped, GetHashKey("CIVMALE"));
-            ClearPedTasksImmediately(ped)
+            ClearPedTasksImmediately(ped);
+            SetPedMaxHealth(ped,100);
+            SetPedArmour(ped,0);
         }
     }
 }
@@ -261,11 +302,11 @@ export default function initAllyPed() {
     cleanupLostAllies();
 
     RegisterCommand("spawnally", (source, args) => {
-        if (allies.length < 3) {
+        if (allies.length < ALLY_LIMIT) {
             const ally = new AllyPed();
             allies.push(ally);
         } else {
-            sendChat('Max 3 allies at a time')
+            sendChat(`Max ${ALLY_LIMIT} allies at a time`)
         }
     }, false);
 
