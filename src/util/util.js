@@ -10,13 +10,13 @@ export async function loadModel(modelHash) {
 
         RequestModel(modelHash)
 
-        let timeout = 5000;
+        let timeout = 20000;
         while (!HasModelLoaded(modelHash)) {
             timeout -= 10;
-            Wait(10);
+            await sleep(10);
 
             if (!timeout) {
-                reject(new Error("Failed to load model after 1000ms"));
+                reject(new Error("Failed to load model after 20,000ms"));
 
                 return;
             }
@@ -73,4 +73,54 @@ export function getPlayerAimTarget() {
     const [aiming, targetPed] = GetEntityPlayerIsFreeAimingAt(PlayerId());
 
     return aiming ? targetPed : false;
+}
+
+export function getFreeVehicleSeats(vehicle, forceDriverAvailable = false) {
+    const vehicleSeats = GetVehicleMaxNumberOfPassengers(vehicle);
+    const result = [];
+
+    if (forceDriverAvailable) {
+        result.push(-1);
+    }
+
+    for (let seat = -1; seat < vehicleSeats; seat++) {
+        if (IsVehicleSeatFree(vehicle, seat)) {
+            result.push(seat);
+        }
+    }
+
+    return result.filter((ele,index) => result.indexOf(ele) === index);
+}
+
+export function findNearbyFreeVehicle(ped) {
+    const coords = GetEntityCoords(ped, false);
+    const allVehicles = GetGamePool('CVehicle');
+    let vehicles = [];
+
+    for (let vehicle of allVehicles) {
+        const driverPed = GetPedInVehicleSeat(vehicle,-1);
+
+        if (IsPedAPlayer(driverPed)) {
+            continue;
+        }
+
+        if (GetEntitySpeed(vehicle) > 1) {
+            continue;
+        }
+
+        if (GetPedRelationshipGroupHash(driverPed) === GetHashKey('PLAYER')) {
+            continue;
+        }
+
+        const vehicleCoords = GetEntityCoords(vehicle,false)
+        vehicles.push({
+            entity: vehicle,
+            distance: GetDistanceBetweenCoords(coords[0],coords[1],coords[2],vehicleCoords[0],vehicleCoords[1],vehicleCoords[2], true)
+        });
+    }
+
+    vehicles = vehicles.filter((veh) => veh.distance < 30);
+    vehicles.sort((a,b) => a.distance - b.distance);
+
+    return vehicles.length ? vehicles[0] : null;
 }

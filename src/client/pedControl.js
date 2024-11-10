@@ -120,7 +120,11 @@ export default function initPedControl() {
             SetPedRelationshipGroupHash(ped, GetHashKey("HATES_PLAYER"));
 
             SetPedCombatAttributes(ped, 46, true);
-            SetPedFleeAttributes(ped, 0, false);
+            //SetPedFleeAttributes(ped, 0, false);
+
+            SetPedCombatRange(ped, Math.round(Math.random() * 3));
+            SetPedCombatMovement(ped, Math.round(Math.random() * 3));
+            SetPedCombatAbility(ped, Math.round(Math.random() * 2));
 
             const accuracy = Math.round(50 + (Math.random() * 80));
 

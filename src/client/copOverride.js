@@ -68,7 +68,7 @@ export default function initCopOverride() {
                 setters.setModel(modelToUse);
             }
         } catch (err) {
-            sendChat(err.message);
+            sendChat('err', err.message);
         }
     });
 }
