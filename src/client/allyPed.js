@@ -4,21 +4,11 @@ import PedestrianHashes from "../util/PedestrianHashes";
 const ALLY_MAX_HEALTH = 2000;
 const ALLY_LIMIT = 8;
 
-const ThinkStates = {
-    "None": -1,
-    "FollowPlayerOnFoot": "FollowPlayerOnFoot",
-    "FollowPlayerInVehicle": "FollowPlayerInVehicle",
-    "EnterVehicle": "EnterVehicle",
-    "ExitVehicle": "ExitVehicle",
-    "AimAtTarget": "AimAtTarget",
-}
-
 class AllyPed {
     constructor() {
         this.allyPed = 0;
         this.vehicleSeat = [0,0]; // [vehicle,seat]
         this.blip = 0;
-        this.thinkState = ThinkStates.FollowPlayerOnFoot;
 
         const pedModels = Object.values(PedestrianHashes);
         const pedModel = pedModels[Math.round(Math.random() * (pedModels.length - 1))];
@@ -44,6 +34,7 @@ class AllyPed {
                 SetPedMaxHealth(this.allyPed, ALLY_MAX_HEALTH);
                 SetEntityHealth(this.allyPed, ALLY_MAX_HEALTH);
                 SetPedArmour(this.allyPed, 100);
+                SetPedCanRagdoll(this.allyPed,false);
 
                 SetPedCombatAttributes(this.allyPed, 46, true); // Can fight armed peds
                 SetPedCombatAttributes(this.allyPed, 0, true); // Can use cover
@@ -59,7 +50,7 @@ class AllyPed {
                 SetPedAccuracy(this.allyPed, 95);
 
                 //SetPedAsCop(allyPed, true); // Gives police-like behavior for hostile peds
-                //this.followPlayerOnFoot();
+                this.followPlayerOnFoot();
 
                 // todo: If player is in a vehicle, check for free seats, and set the ally into the vehicle if there is room
                 const playerVehicle = GetVehiclePedIsIn(playerPedId, false);
@@ -90,7 +81,6 @@ class AllyPed {
 
         // Ally is currently out of combat
         if (playerVehicle && !pedVehicle) {
-            if (this.thinkState !== ThinkStates.EnterVehicle) {
                 const findVehicle = this.findVehicleToEnter();
                 if (findVehicle) {
                     debugChat(`found vehicle ${findVehicle[0]} and seat ${findVehicle[1]}`)
@@ -100,47 +90,34 @@ class AllyPed {
                                })
                                .catch((err) => {
                                    debugChat(err.message);
-                                   this.thinkState = ThinkStates.None;
                                });
                 } else {
                     debugChat('No vehicle')
                 }
-            }
-        } else if (!playerVehicle && nowVehicle && this.thinkState !== ThinkStates.ExitVehicle) {
+        } else if (!playerVehicle && nowVehicle) {
             // exit vehicle
-            return this.exitVehicle().then(() => this.followPlayerOnFoot());
-        } else if (playerVehicle && nowVehicle && this.thinkState !== ThinkStates.FollowPlayerInVehicle) {
+            return this.exitVehicle();
+        } else if (playerVehicle && nowVehicle) {
             if (this.vehicleSeat[1] === -1) {
                 return this.followPlayerInVehicle(2000);
             }
-        } else if (!playerVehicle && !pedVehicle && playerFreeAimTarget && this.thinkState !== `${ThinkStates.AimAtTarget}:${playerFreeAimTarget}`) {
+        } else if (!playerVehicle && !pedVehicle && playerFreeAimTarget) {
             return this.aimAtTargetWithPlayer(playerFreeAimTarget);
-        } else if (this.thinkState !== ThinkStates.FollowPlayerOnFoot) {
-            return this.followPlayerOnFoot;
-        } else {
-            sendChat('unknown ally state')
+        } else if (!IsPedInCombat(this.allyPed, -1)) {
+            sendChat(`ally following on foot`)
+            this.followPlayerOnFoot();
         }
 
         return sleep(1000).then(() => this.think());
     }
 
-    followPlayerOnFoot(timeout = 1000) {
-        debugChat(`Ally ${this.allyPed} followPlayerOnFoot`);
-        this.thinkState = ThinkStates.FollowPlayerOnFoot;
-
-        return new Promise(async (resolve,reject) => {
-            TaskFollowToOffsetOfEntity(this.allyPed, PlayerPedId(), 0, -2, 0, 5.0, -1, 1.0, true);
-            SetPedKeepTask(this.allyPed, true);
-
-            sleep(timeout).then(() => resolve());
-        }).finally(() => {
-            this.think()
-        });
+    followPlayerOnFoot() {
+        TaskFollowToOffsetOfEntity(this.allyPed, PlayerPedId(), 0, -2, 0, 5.0, -1, 1.0, true);
+        SetPedKeepTask(this.allyPed, true);
     }
 
     followPlayerInVehicle(timeout = 1000) {
         debugChat(`Ally ${this.allyPed} followPlayerInVehicle`)
-        this.thinkState = ThinkStates.FollowPlayerInVehicle;
 
         return new Promise(async (resolve,reject) => {
             TaskVehicleFollow(this.allyPed, this.vehicleSeat[0], PlayerPedId(), 100, 1074528293, 5);
@@ -177,7 +154,6 @@ class AllyPed {
     // Exit the current vehicle. Promise resolves after 1sec (an arbitrary delay)
     exitVehicle() {
         debugChat(`Ally ${this.allyPed} exitVehicle`)
-        this.thinkState = ThinkStates.ExitVehicle;
 
         return new Promise((resolve, reject) => {
             TaskLeaveAnyVehicle(this.allyPed, 0, 0);
@@ -193,10 +169,9 @@ class AllyPed {
     }
 
     // Enter the specified vehicle. Checks if we managed to do so and resolves, and rejects if we couldnt get in by the timeout
-    enterVehicle(vehicle, seat, timeout = 3000) {
+    enterVehicle(vehicle, seat, timeout = 5000) {
         debugChat(`Ally ${this.allyPed} enterVehicle`)
         this.vehicleSeat = [vehicle,seat];
-        this.thinkState = ThinkStates.EnterVehicle;
 
         return new Promise((resolve, reject) => {
             TaskEnterVehicle(this.allyPed, vehicle, timeout, seat, 2, 1, 0);
@@ -223,8 +198,6 @@ class AllyPed {
 
     // Aim at target with player, stop when player does
     aimAtTargetWithPlayer(target) {
-        this.thinkState = `${ThinkStates.AimAtTarget}:${target}`;
-
         debugChat(`Ally ${this.allyPed} aimAtTargetWithPlayer`)
         return new Promise((resolve, reject) => {
             TaskAimGunAtEntity(this.allyPed, target, -1, false);
@@ -300,6 +273,12 @@ function cleanupLostAllies() {
 export default function initAllyPed() {
     // Lets see if we can find leftover followers from a script restart
     cleanupLostAllies();
+
+    RegisterCommand("killallies", (source, args) => {
+        for (let ally of allies) {
+            ApplyDamageToPed(ally.allyPed, 100000000);
+        }
+    }, false);
 
     RegisterCommand("spawnally", (source, args) => {
         if (allies.length < ALLY_LIMIT) {
