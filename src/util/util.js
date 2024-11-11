@@ -147,5 +147,5 @@ export function findNearbyFreeVehicles(ped, maxDistance = 30) {
 }
 
 export function debugChat(message) {
-    sendChat(message);
+   //sendChat(message);
 }

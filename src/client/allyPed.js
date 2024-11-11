@@ -1,14 +1,18 @@
-import {debugChat, findNearbyFreeVehicles, getFreeVehicleSeats, getPlayerAimTarget, isPedAnAlly, loadModel, sendChat, sleep, throttle} from "../util/util";
+import {debugChat, distanceBetweenEntities, findNearbyFreeVehicles, getFreeVehicleSeats, getPlayerAimTarget, isPedAnAlly, loadModel, sendChat, sleep, throttle} from "../util/util";
 import PedestrianHashes from "../util/PedestrianHashes";
+import {Ped} from "fivem-js";
 
 const ALLY_MAX_HEALTH = 2000;
 const ALLY_LIMIT = 8;
+const ALLY_IGNORE_EVENTS_DISTANCE = 60;
+const ALLY_EXIT_VEHICLE_DISTANCE = 30;
 
 class AllyPed {
     constructor() {
         this.allyPed = 0;
         this.vehicleSeat = [0,0]; // [vehicle,seat]
         this.blip = 0;
+        this.currentThink = null;
 
         const pedModels = Object.values(PedestrianHashes);
         const pedModel = pedModels[Math.round(Math.random() * (pedModels.length - 1))];
@@ -34,20 +38,29 @@ class AllyPed {
                 SetPedMaxHealth(this.allyPed, ALLY_MAX_HEALTH);
                 SetEntityHealth(this.allyPed, ALLY_MAX_HEALTH);
                 SetPedArmour(this.allyPed, 100);
-                SetPedCanRagdoll(this.allyPed,false);
+                SetPedRandomProps(this.allyPed);
 
-                SetPedCombatAttributes(this.allyPed, 46, true); // Can fight armed peds
+                SetPedCanRagdoll(this.allyPed,false);
+                SetPedCanBeDraggedOut(this.allyPed, false);
+                SetPedCanBeKnockedOffVehicle(this.allyPed,false);
+
+                SetPedPathCanUseClimbovers(this.allyPed, true);
+                SetPedPathCanUseLadders(this.allyPed, true);
+                SetPedPathCanDropFromHeight(this.allyPed, true);
+
                 SetPedCombatAttributes(this.allyPed, 0, true); // Can use cover
                 SetPedCombatAttributes(this.allyPed, 14, true); // Ped can investigate events such as distant gunfire, footsteps, explosions etc
                 SetPedCombatAttributes(this.allyPed, 20, true); // Ped can do unarmed taunts in vehicle
                 SetPedCombatAttributes(this.allyPed, 21, true); // Ped will be able to chase their targets if both are on foot and the target is running away
                 SetPedCombatAttributes(this.allyPed, 41, true); // Ped is allowed to "jack" vehicles when needing to chase a target in combat
+                SetPedCombatAttributes(this.allyPed, 46, true); // Can fight armed peds
 
                 SetPedCombatAbility(this.allyPed, 2); // Set combat ability (0: poor, 1: average, 2: professional)
                 SetPedCombatRange(this.allyPed, 2); // Aggressive combat range
                 SetPedFleeAttributes(this.allyPed, 0, false); // Will not flee
 
                 SetPedAccuracy(this.allyPed, 95);
+                //SetEntityInvincible(this.allyPed, true);
 
                 //SetPedAsCop(allyPed, true); // Gives police-like behavior for hostile peds
                 this.followPlayerOnFoot();
@@ -64,51 +77,67 @@ class AllyPed {
                 SetModelAsNoLongerNeeded(modelHash);
             })
             .catch((err) => {
-                sendChat(err.message);
+                debugChat(err.message);
             });
     }
 
     think() {
         if (allies.indexOf(this) === -1) {
+            debugChat(`Ally think task ending (died, out of range, etc)`)
             return;
         }
 
-        const playerPed = PlayerPedId();
-        const playerVehicle = GetVehiclePedIsIn(playerPed, false);
-        const pedVehicle = this.vehicleSeat[0];
-        const nowVehicle = GetVehiclePedIsIn(this.allyPed, false);
-        const playerFreeAimTarget = getPlayerAimTarget();
+        if (!this.currentThink) {
+            (() => {
+                const playerPed = PlayerPedId();
+                const playerVehicle = GetVehiclePedIsIn(playerPed, false);
+                const pedVehicleUsing = GetVehiclePedIsUsing(this.allyPed) || GetVehiclePedIsTryingToEnter(this.allyPed);
+                const pedActuallyInVehicle = GetVehiclePedIsIn(this.allyPed, false);
+                const playerFreeAimTarget = getPlayerAimTarget();
+                const distanceFromPlayer = distanceBetweenEntities(playerPed,this.allyPed);
+                const isInCombat = IsPedInCombat(this.allyPed, -1)
 
-        // Ally is currently out of combat
-        if (playerVehicle && !pedVehicle) {
-                const findVehicle = this.findVehicleToEnter();
-                if (findVehicle) {
-                    debugChat(`found vehicle ${findVehicle[0]} and seat ${findVehicle[1]}`)
-                    return this.enterVehicle(findVehicle[0], findVehicle[1])
-                               .then(() => {
-                                   this.think();
-                               })
-                               .catch((err) => {
-                                   debugChat(err.message);
-                               });
-                } else {
-                    debugChat('No vehicle')
+                if (distanceFromPlayer > ALLY_IGNORE_EVENTS_DISTANCE) {
+                    TaskSetBlockingOfNonTemporaryEvents(this.allyPed, true)
+                } else if (distanceFromPlayer < ALLY_IGNORE_EVENTS_DISTANCE-5) {
+                    TaskSetBlockingOfNonTemporaryEvents(this.allyPed, false)
                 }
-        } else if (!playerVehicle && nowVehicle) {
-            // exit vehicle
-            return this.exitVehicle();
-        } else if (playerVehicle && nowVehicle) {
-            if (this.vehicleSeat[1] === -1) {
-                return this.followPlayerInVehicle(2000);
-            }
-        } else if (!playerVehicle && !pedVehicle && playerFreeAimTarget) {
-            return this.aimAtTargetWithPlayer(playerFreeAimTarget);
-        } else if (!IsPedInCombat(this.allyPed, -1)) {
-            sendChat(`ally following on foot`)
-            this.followPlayerOnFoot();
+
+                if (playerVehicle && !pedVehicleUsing) {
+                    const findVehicle = this.findVehicleToEnter();
+                    if (findVehicle) {
+                        debugChat(`found vehicle ${findVehicle[0]} and seat ${findVehicle[1]}`)
+                        this.currentThink = this.enterVehicle(findVehicle[0], findVehicle[1]);
+
+                        return;
+                    }
+                }
+
+                if ((playerVehicle || distanceFromPlayer > ALLY_EXIT_VEHICLE_DISTANCE) && pedActuallyInVehicle && GetPedInVehicleSeat(pedActuallyInVehicle, -1) === this.allyPed) {
+                    // drive towards player
+                    this.followPlayerInVehicle(pedActuallyInVehicle, playerVehicle);
+
+                    return;
+                }
+
+                if (!playerVehicle && pedActuallyInVehicle && distanceFromPlayer <= ALLY_EXIT_VEHICLE_DISTANCE) {
+                    // exit vehicle
+                    this.currentThink = this.exitVehicle();
+
+                    return;
+                }
+
+                if (!playerVehicle && !pedActuallyInVehicle && playerFreeAimTarget) {
+                    this.currentThink = this.aimAtTargetWithPlayer(playerFreeAimTarget);
+
+                    return;
+                }
+
+                debugChat('no thought')
+            })();
         }
 
-        return sleep(1000).then(() => this.think());
+        sleep(2000).then(() => this.think());
     }
 
     followPlayerOnFoot() {
@@ -116,22 +145,14 @@ class AllyPed {
         SetPedKeepTask(this.allyPed, true);
     }
 
-    followPlayerInVehicle(timeout = 1000) {
+    followPlayerInVehicle(vehicle, playerVehicle) {
         debugChat(`Ally ${this.allyPed} followPlayerInVehicle`)
 
-        return new Promise(async (resolve,reject) => {
-            TaskVehicleFollow(this.allyPed, this.vehicleSeat[0], PlayerPedId(), 100, 1074528293, 5);
-
-            sleep(timeout).then(() => resolve());
-        }).finally(() => {
-            this.think()
-        });
+        TaskVehicleEscort(this.allyPed, vehicle, playerVehicle, -1, 100, 6, 5, 0, 30);
     }
 
     findVehicleToEnter() {
-        debugChat(`Ally ${this.allyPed} findVehicleToEnter`)
         const nearbyVehicles = findNearbyFreeVehicles(this.allyPed, 30);
-        debugChat(nearbyVehicles);
 
         for (let vehicle of nearbyVehicles) {
             try {
@@ -164,7 +185,8 @@ class AllyPed {
                     resolve();
                 });
         }).finally(() => {
-            this.think()
+            //this.think()
+            this.currentThink = null;
         });
     }
 
@@ -174,13 +196,24 @@ class AllyPed {
         this.vehicleSeat = [vehicle,seat];
 
         return new Promise((resolve, reject) => {
-            TaskEnterVehicle(this.allyPed, vehicle, timeout, seat, 2, 1, 0);
+            const currDriverPed = GetPedInVehicleSeat(vehicle,seat);
+            // if (IsPedDeadOrDying(currDriverPed, false)) {
+            //     DeletePed(currDriverPed);
+            // }
+            TaskEnterVehicle(this.allyPed, vehicle, timeout, seat, 2, 8, 0);
 
             let timer = 0;
             const intervalTicker = setInterval(() => {
                 if (IsPedInVehicle(this.allyPed, vehicle, true)) {
                     clearInterval(intervalTicker);
                     resolve(vehicle,seat);
+
+                    const inVehicleTicker = setInterval(() => {
+                        if (!IsPedInVehicle(this.allyPed, vehicle, true)) {
+                            this.vehicleSeat = [0,0];
+                            clearTimeout(inVehicleTicker);
+                        }
+                    }, 1000);
 
                     return;
                 }
@@ -193,7 +226,10 @@ class AllyPed {
                     reject(new Error('Did not enter vehicle in time'));
                 }
             }, Math.min(timeout, 1000));
-        })
+        }).finally(() => {
+            //this.think();
+            this.currentThink = null;
+        });
     }
 
     // Aim at target with player, stop when player does
@@ -224,7 +260,8 @@ class AllyPed {
                 }
             }, 2000);
         }).finally(() => {
-            this.think()
+            //this.think()
+            this.currentThink = null;
         });
     }
 
@@ -243,7 +280,8 @@ class AllyPed {
                 }
             }, 1000);
         }).finally(() => {
-            this.think()
+            //this.think()
+            this.currentThink = null;
         });
     }
 }
@@ -261,11 +299,14 @@ function cleanupLostAllies() {
 
     for (let ped of allPeds) {
         if (isPedAnAlly(ped, true)) {
+            SetEntityInvincible(ped, false);
             SetPedAsNoLongerNeeded(ped);
             SetPedRelationshipGroupHash(ped, GetHashKey("CIVMALE"));
             ClearPedTasksImmediately(ped);
             SetPedMaxHealth(ped,100);
             SetPedArmour(ped,0);
+
+            ApplyDamageToPed(ped, 1000, true);
         }
     }
 }
@@ -276,7 +317,8 @@ export default function initAllyPed() {
 
     RegisterCommand("killallies", (source, args) => {
         for (let ally of allies) {
-            ApplyDamageToPed(ally.allyPed, 100000000);
+            SetEntityInvincible(ally.allyPed, false);
+            ApplyDamageToPed(ally.allyPed, 100000, true);
         }
     }, false);
 
@@ -319,3 +361,5 @@ export default function initAllyPed() {
         });
     }, 5000));
 }
+
+debugChat('skymod initialised')
