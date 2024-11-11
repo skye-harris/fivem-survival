@@ -1,11 +1,11 @@
-import {debugChat, distanceBetweenEntities, findNearbyFreeVehicles, findVehicleSpawnPointOutOfSight, getPlayerAimTarget, isPedAnAlly, loadModel, sendChat, sleep, throttle} from "../util/util";
+import {debugChat, distanceBetweenEntities, findNearbyFreeVehicles, findVehicleSpawnPointOutOfSight, getFreeVehicleSeats, getPlayerAimTarget, isPedAnAlly, loadModel, sendChat, sleep, throttle} from "../util/util";
 import PedestrianHashes from "../util/PedestrianHashes";
 import {Ped, VehicleHash} from "fivem-js";
 
 const ALLY_MAX_HEALTH = 2000;
 const ALLY_LIMIT = 8;
 const ALLY_IGNORE_EVENTS_DISTANCE = 60;
-const ALLY_EXIT_VEHICLE_DISTANCE = 30;
+const ALLY_EXIT_VEHICLE_DISTANCE = 10;
 
 class AllyPed {
     constructor() {
@@ -13,6 +13,7 @@ class AllyPed {
         this.vehicleSeat = [0,0]; // [vehicle,seat]
         this.blip = 0;
         this.currentThink = null;
+        this.ignoringTemporaryEvents = false;
 
         const pedModels = Object.values(PedestrianHashes);
         const pedModel = pedModels[Math.round(Math.random() * (pedModels.length - 1))];
@@ -23,7 +24,30 @@ class AllyPed {
 
         loadModel(modelHash)
             .then(async () => {
-                this.allyPed = CreatePed(4, modelHash, playerCoords[0], playerCoords[1] , playerCoords[2], GetEntityHeading(playerPedId), true, true)
+                let spawnCoords = findVehicleSpawnPointOutOfSight(PlayerPedId(), 60, 100);
+                const spawnVehicle = !!spawnCoords;
+                let vehicleHash = null;
+
+                spawnCoords = spawnCoords ||  [playerCoords[0], playerCoords[1] + 2, playerCoords[2]];
+                const playerVehicle = GetVehiclePedIsIn(playerPedId, false);
+
+                if (spawnVehicle) {
+                    const vehicles = [
+                        VehicleHash.Sanctus,
+                        VehicleHash.ZombieB,
+                        VehicleHash.Defiler,
+                        VehicleHash.Avarus,
+                        VehicleHash.Cliffhanger,
+                        VehicleHash.Chimera,
+                        VehicleHash.Hexer,
+                        VehicleHash.Esskey,
+                        VehicleHash.Manchez,
+                    ];
+                    vehicleHash = vehicles[Math.round(Math.random() * vehicles.length-1)]
+                    await loadModel(vehicleHash);
+                }
+
+                this.allyPed = CreatePed(4, modelHash, spawnCoords[0], spawnCoords[1] , spawnCoords[2], GetEntityHeading(playerPedId), true, true)
                 this.blip = AddBlipForEntity(this.allyPed)
                 SetBlipFriendly(this.blip, true);
 
@@ -62,26 +86,22 @@ class AllyPed {
                 SetPedAccuracy(this.allyPed, 95);
                 //SetEntityInvincible(this.allyPed, true);
 
-                //SetPedAsCop(allyPed, true); // Gives police-like behavior for hostile peds
                 this.followPlayerOnFoot();
 
-                const vehicleSpawnCoords = findVehicleSpawnPointOutOfSight(PlayerPedId(), 50, 100) || playerCoords;
-                if (vehicleSpawnCoords) {
-                    await loadModel(VehicleHash.Bullet);
-                    const vehicle = CreateVehicle(VehicleHash.Bullet, vehicleSpawnCoords[0], vehicleSpawnCoords[1], vehicleSpawnCoords[2], vehicleSpawnCoords[3], true, false);
+                if (spawnVehicle) {
+                    const vehicle = CreateVehicle(vehicleHash, spawnCoords[0], spawnCoords[1], spawnCoords[2], spawnCoords[3], true, false);
                     SetPedIntoVehicle(this.allyPed, vehicle, -1);
-                    //TaskVehicleDriveToCoord(this.allyPed, vehicle, playerCoords[0], playerCoords[1], playerCoords[2], 120, VehicleHash.Bullet, 1, 6, 5, 0)
+
+                    this.followPlayerInVehicle(vehicle, playerVehicle)
+                } else {
+                    // If player is in a vehicle, check for free seats, and set the ally into the vehicle if there is room
+                    if (playerVehicle && IsAnyVehicleSeatEmpty(playerVehicle)) {
+                        const freeSeat = getFreeVehicleSeats()[0];
+                        TaskWarpPedIntoVehicle(this.allyPed, playerVehicle, freeSeat);
+                    }
                 }
+
                 this.think();
-
-                // todo: If player is in a vehicle, check for free seats, and set the ally into the vehicle if there is room
-                // const playerVehicle = GetVehiclePedIsIn(playerPedId, false);
-                // if (playerVehicle && IsAnyVehicleSeatEmpty(playerVehicle) && !vehicleSpawnCoords) {
-                //     const freeSeat = getFreeVehicleSeats()[0];
-                //     TaskWarpPedIntoVehicle(this.allyPed, playerVehicle, freeSeat);
-                // }
-
-                // this.think();
 
                 SetModelAsNoLongerNeeded(modelHash);
             })
@@ -104,15 +124,19 @@ class AllyPed {
                 const pedActuallyInVehicle = GetVehiclePedIsIn(this.allyPed, false);
                 const playerFreeAimTarget = getPlayerAimTarget();
                 const distanceFromPlayer = distanceBetweenEntities(playerPed,this.allyPed);
-                const isInCombat = IsPedInCombat(this.allyPed, -1)
+                const isInCombat = IsPedInCombat(this.allyPed, -1);
 
-                if (distanceFromPlayer > ALLY_IGNORE_EVENTS_DISTANCE) {
+                if (distanceFromPlayer > ALLY_IGNORE_EVENTS_DISTANCE && !this.ignoringTemporaryEvents) {
+                    this.ignoringTemporaryEvents = true;
                     TaskSetBlockingOfNonTemporaryEvents(this.allyPed, true)
-                } else if (distanceFromPlayer < ALLY_IGNORE_EVENTS_DISTANCE-5) {
+                    debugChat(`Ally ${this.allyPed} is now ignoring temporary events`)
+                } else if (distanceFromPlayer < ALLY_IGNORE_EVENTS_DISTANCE-5 && this.ignoringTemporaryEvents) {
+                    this.ignoringTemporaryEvents = false;
                     TaskSetBlockingOfNonTemporaryEvents(this.allyPed, false)
+                    debugChat(`Ally ${this.allyPed} is no longer ignoring temporary events`)
                 }
 
-                if (playerVehicle && !pedVehicleUsing) {
+                if (playerVehicle && !pedVehicleUsing && (!isInCombat || this.ignoringTemporaryEvents)) {
                     const findVehicle = this.findVehicleToEnter();
                     if (findVehicle) {
                         debugChat(`found vehicle ${findVehicle[0]} and seat ${findVehicle[1]}`)
@@ -122,7 +146,7 @@ class AllyPed {
                     }
                 }
 
-                if ((playerVehicle || distanceFromPlayer > ALLY_EXIT_VEHICLE_DISTANCE) && pedActuallyInVehicle && GetPedInVehicleSeat(pedActuallyInVehicle, -1) === this.allyPed) {
+                if (playerVehicle && pedActuallyInVehicle && GetPedInVehicleSeat(pedActuallyInVehicle, -1) === this.allyPed && distanceFromPlayer > 30) {
                     // drive towards player
                     this.followPlayerInVehicle(pedActuallyInVehicle, playerVehicle);
 
@@ -144,7 +168,7 @@ class AllyPed {
             })();
         }
 
-        sleep(2000).then(() => this.think());
+        sleep(1000).then(() => this.think());
     }
 
     followPlayerOnFoot() {
@@ -315,21 +339,16 @@ function cleanupLostAllies() {
 
     for (let ped of allPeds) {
         if (isPedAnAlly(ped, true)) {
-            SetEntityInvincible(ped, false);
-            SetPedAsNoLongerNeeded(ped);
-            SetPedRelationshipGroupHash(ped, GetHashKey("CIVMALE"));
-            ClearPedTasksImmediately(ped);
-            SetPedMaxHealth(ped,100);
-            SetPedArmour(ped,0);
-
-            ApplyDamageToPed(ped, 1000, true);
+            DeletePed(ped);
         }
     }
 }
 
 export default function initAllyPed() {
     // Lets see if we can find leftover followers from a script restart
-    cleanupLostAllies();
+    setTimeout(() => {
+        cleanupLostAllies();
+    }, 1000);
 
     RegisterCommand("killallies", (source, args) => {
         for (let ally of allies) {

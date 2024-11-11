@@ -165,19 +165,21 @@ export function getHeadingTowardsPed(spawnX, spawnY, ped) {
 export function findVehicleSpawnPointOutOfSight(playerPed, minDistance = 100.0, maxDistance = 200.0) {
     const playerCoords = GetEntityCoords(playerPed, true);
 
-    for (let i = 0; i < 15; i++) {  // Try multiple times to find a suitable spot
+    // Lets try find a suitable place to spawn a vehicle out of sight from the player
+    for (let i = 0; i < 1000; i++) {
         // Randomly pick a point within the distance range
         const angle = Math.random() * Math.PI * 2;
         const distance = minDistance + Math.random() * (maxDistance - minDistance);
         const targetX = playerCoords[0] + Math.cos(angle) * distance;
         const targetY = playerCoords[1] + Math.sin(angle) * distance;
 
-        // Find the closest road node near the random point
-        const [found, coords, heading] = GetClosestVehicleNodeWithHeading(targetX, targetY, playerCoords[2], 0, 0, 0);
+        // Try find an appropriate road node
+        const [found, coords, heading] = GetNthClosestVehicleNodeFavourDirection(targetX, targetY, playerCoords[2], playerCoords[0], playerCoords[1], playerCoords[2], 0, 0, 0, 0);
         if (found) {
+            const travelDistance = CalculateTravelDistanceBetweenPoints(playerCoords[0], playerCoords[1], playerCoords[2], coords[0], coords[1], coords[2]);
             // Check if the road node is out of the player’s line of sight
-            if (!IsSphereVisible(coords[0], coords[1], coords[2], 2.0)) {
-                return [...coords, getHeadingTowardsPed(coords[0], coords[1], PlayerPedId())]
+            if (travelDistance >= minDistance && travelDistance <= maxDistance && !IsSphereVisible(coords[0], coords[1], coords[2], 2.0)) {
+                return [...coords, heading];
             }
         }
     }
