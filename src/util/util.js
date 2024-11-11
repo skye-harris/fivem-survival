@@ -149,3 +149,38 @@ export function findNearbyFreeVehicles(ped, maxDistance = 30) {
 export function debugChat(message) {
    //sendChat(message);
 }
+
+export function getHeadingTowardsPed(spawnX, spawnY, ped) {
+    const pedCoords = GetEntityCoords(ped, true);
+    const deltaX = pedCoords[0] - spawnX;
+    const deltaY = pedCoords[1] - spawnY;
+
+    // Calculate the heading using the 2D vector angle
+    const heading = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+
+    // Convert to a value between 0 and 360 (FiveM expects heading in this range)
+    return (heading + 360) % 360;
+}
+
+export function findVehicleSpawnPointOutOfSight(playerPed, minDistance = 100.0, maxDistance = 200.0) {
+    const playerCoords = GetEntityCoords(playerPed, true);
+
+    for (let i = 0; i < 15; i++) {  // Try multiple times to find a suitable spot
+        // Randomly pick a point within the distance range
+        const angle = Math.random() * Math.PI * 2;
+        const distance = minDistance + Math.random() * (maxDistance - minDistance);
+        const targetX = playerCoords[0] + Math.cos(angle) * distance;
+        const targetY = playerCoords[1] + Math.sin(angle) * distance;
+
+        // Find the closest road node near the random point
+        const [found, coords, heading] = GetClosestVehicleNodeWithHeading(targetX, targetY, playerCoords[2], 0, 0, 0);
+        if (found) {
+            // Check if the road node is out of the player’s line of sight
+            if (!IsSphereVisible(coords[0], coords[1], coords[2], 2.0)) {
+                return [...coords, getHeadingTowardsPed(coords[0], coords[1], PlayerPedId())]
+            }
+        }
+    }
+
+    return null;  // Return null if no suitable point is found after multiple attempts
+}
