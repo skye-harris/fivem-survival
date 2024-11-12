@@ -5,7 +5,7 @@ export async function sleep(ms) {
 export async function loadModel(modelHash) {
     return new Promise(async (resolve,reject) => {
         if (!IsModelValid(modelHash) || !IsModelInCdimage(modelHash)) {
-            reject(new Error("Model is not valid"));
+            reject(new Error(`Model ${modelHash} is not valid`));
         }
 
         RequestModel(modelHash)
@@ -185,4 +185,23 @@ export function findVehicleSpawnPointOutOfSight(playerPed, minDistance = 100.0, 
     }
 
     return null;  // Return null if no suitable point is found after multiple attempts
+}
+
+export function displayTextOnScreen(text, x, y, scale = 1, colour = [255,255,255,255], timeout = 5000, centerOnCoords = false) {
+    const textTicker = setTick(() => {
+        SetTextFont(0); // Font type
+        SetTextProportional(1);
+        SetTextScale(scale, scale);
+        SetTextColour(colour[0], colour[1], colour[2], colour[3]); // RGBA color
+        SetTextDropShadow();
+        SetTextOutline();
+        SetTextEntry("STRING");
+        SetTextCentre(centerOnCoords);
+        AddTextComponentString(Array.isArray(text) ? text.join("\n") : text);
+        DrawText(x, y);
+    });
+
+    setTimeout(() => {
+        clearTick(textTicker);
+    }, timeout);
 }

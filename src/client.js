@@ -3,6 +3,7 @@ import initFlameTrail from "./client/flames";
 import initCopOverride from "./client/copOverride";
 import initPedControl from "./client/pedControl";
 import initAllyPed from "./client/allyPed";
+import {displayTextOnScreen} from "./util/util";
 
 // Start the trains running
 for (let trackIndex of [0, 3]) {
@@ -30,3 +31,5 @@ initFlameTrail();
 initCopOverride();
 initPedControl();
 initAllyPed();
+
+displayTextOnScreen("SkyMod started", 0, 0, 0.5, [255,255,255,200], 3000, false);
