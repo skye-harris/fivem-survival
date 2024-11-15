@@ -1,3 +1,7 @@
+export function debugChat(message) {
+    //sendChat(message);
+}
+
 export async function sleep(ms) {
     return new Promise(res => setTimeout(res,ms));
 }
@@ -50,6 +54,20 @@ export function throttle(func, wait = 250) {
                 isWaiting = false;
             }, wait);
         }
+    };
+}
+
+export function debounce(func, delay = 250) {
+    let timeout = null;
+
+    return function executedFunction(...args) {
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+
+        timeout = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
     };
 }
 
@@ -144,10 +162,6 @@ export function findNearbyFreeVehicles(ped, maxDistance = 30) {
     vehicles.sort((a,b) => a.distance - b.distance);
 
     return vehicles.map((vehicle) => vehicle.entity);
-}
-
-export function debugChat(message) {
-   //sendChat(message);
 }
 
 export function getHeadingTowardsPed(spawnX, spawnY, ped) {
