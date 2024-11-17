@@ -4,6 +4,9 @@ import initCopOverride from "./client/copOverride";
 import initPedControl from "./client/pedControl";
 import initAllyPed from "./client/allyPed";
 import {displayTextOnScreen, sendChat} from "./util/util";
+import initAiTest from "./client/aiTest";
+import config from "./client/config";
+import initInteractiveObjects from "./client/interactiveObjects";
 
 // Start the trains running
 for (let trackIndex of [0, 3]) {
@@ -40,25 +43,20 @@ RegisterCommand("bptyres", (source,args) => {
     }
 });
 
+RegisterCommand('clear', () => {
+    TriggerEvent('chat:clear');
+});
+
 // Init modules
 initFlameTrail();
 initCopOverride();
 initPedControl();
 initAllyPed();
+initInteractiveObjects();
 
-const hatedGroups = [
-    'AMBIENT_GANG_BALLAS',
-    'AMBIENT_GANG_CULT',
-    'AMBIENT_GANG_FAMILY',
-    'AMBIENT_GANG_LOST',
-    'AMBIENT_GANG_MARABUNTE',
-    'AMBIENT_GANG_MEXICAN',
-    'AMBIENT_GANG_SALVA',
-    'AMBIENT_GANG_WEICHENG',
-    'AMBIENT_GANG_HILLBILLY',
-];
+initAiTest();
 
-for (let group of hatedGroups) {
+for (let group of config.hatedGroups) {
     SetRelationshipBetweenGroups(4, GetHashKey('PLAYER'), GetHashKey(group))
     SetRelationshipBetweenGroups(4, GetHashKey(group), GetHashKey('PLAYER'))
 }

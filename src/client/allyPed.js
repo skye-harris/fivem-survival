@@ -2,11 +2,12 @@ import {debounce, debugChat, distanceBetweenEntities, findNearbyFreeVehicles, fi
 import PedestrianHashes from "../util/PedestrianHashes";
 import {VehicleHash} from "fivem-js";
 import config from "./config";
+import {CombatAttributes} from "../util/CombatAttributes";
 
 const ALLY_MAX_HEALTH = 2000;
 const ALLY_LIMIT = 8;
-const ALLY_IGNORE_EVENTS_DISTANCE = 60;
-const ALLY_EXIT_VEHICLE_DISTANCE = 30;
+const ALLY_IGNORE_EVENTS_DISTANCE = 50;
+const ALLY_EXIT_VEHICLE_DISTANCE = 20;
 let entityPlayerRecentlyDamaged = 0;
 
 class AllyPed {
@@ -61,8 +62,9 @@ class AllyPed {
                 this.blip = AddBlipForEntity(this.allyPed)
                 SetBlipFriendly(this.blip, true);
 
-                SetPedAsGroupMember(this.allyPed, GetPedGroupIndex(playerPedId));
-                SetPedRelationshipGroupHash(this.allyPed, GetHashKey("PLAYER"));
+                //SetPedAsGroupMember(this.allyPed, GetPedGroupIndex(playerPedId));
+                SetPedRelationshipGroupHash(this.allyPed, GetHashKey("ALLY_GROUP"));
+                SetEntityCanBeDamagedByRelationshipGroup(this.allyPed, true, GetHashKey("ALLY_GROUP"));
 
                 // todo: set up a pool of weapons to choose from
                 GiveWeaponToPed(this.allyPed, GetHashKey("WEAPON_ASSAULTRIFLE"), 10000, false, false);
@@ -82,23 +84,42 @@ class AllyPed {
                 SetPedPathCanUseLadders(this.allyPed, true);
                 SetPedPathCanDropFromHeight(this.allyPed, true);
 
-                SetPedCombatAttributes(this.allyPed, 0, true); // Can use cover
-                SetPedCombatAttributes(this.allyPed, 3, false); // Ped is not allowed to leave vehicles automatically
-                SetPedCombatAttributes(this.allyPed, 14, true); // Ped can investigate events such as distant gunfire, footsteps, explosions etc
-                SetPedCombatAttributes(this.allyPed, 20, true); // Ped can do unarmed taunts in vehicle
-                SetPedCombatAttributes(this.allyPed, 21, false); // Ped will not chase targets on foot
-                SetPedCombatAttributes(this.allyPed, 41, false); // Ped is allowed to "jack" vehicles when needing to chase a target in combat
-                SetPedCombatAttributes(this.allyPed, 46, true); // Can fight armed peds
-                SetPedCombatAttributes(this.allyPed, 52, true); // Can use vehicle attack
-                SetPedCombatAttributes(this.allyPed, 53, true); // can use vehicle mounted weapons
-                SetPedCombatAttributes(this.allyPed, 78, true); // disable all random flees
+                // SetPedCombatAttributes(this.allyPed, 0, true); // Can use cover
+                // SetPedCombatAttributes(this.allyPed, 3, false); // Ped is not allowed to leave vehicles automatically
+                // SetPedCombatAttributes(this.allyPed, 14, true); // Ped can investigate events such as distant gunfire, footsteps, explosions etc
+                // SetPedCombatAttributes(this.allyPed, 20, true); // Ped can do unarmed taunts in vehicle
+                // SetPedCombatAttributes(this.allyPed, 21, false); // Ped will not chase targets on foot
+                // SetPedCombatAttributes(this.allyPed, 41, false); // Ped is allowed to "jack" vehicles when needing to chase a target in combat
+                // SetPedCombatAttributes(this.allyPed, 46, true); // Can fight armed peds
+                // SetPedCombatAttributes(this.allyPed, 52, true); // Can use vehicle attack
+                // SetPedCombatAttributes(this.allyPed, 53, true); // can use vehicle mounted weapons
+                // SetPedCombatAttributes(this.allyPed, 78, true); // disable all random flees
+
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.USE_COVER, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.LEAVE_VEHICLES, false);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_INVESTIGATE, false); // Whether our ped can can investigate events such as distant gunfire, footsteps, explosions etc
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_TAUNT_IN_VEHICLE, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_CHASE_TARGET_ON_FOOT, false);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_COMMANDEER_VEHICLES, false);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_FIGHT_ARMED_PEDS_WHEN_NOT_ARMED, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.USE_VEHICLE_ATTACK, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.USE_VEHICLE_ATTACK_IF_VEHICLE_HAS_MOUNTED_GUNS, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.DISABLE_ALL_RANDOMS_FLEE, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_USE_DYNAMIC_STRAFE_DECISIONS, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.FLEE_WHILST_IN_VEHICLE, false);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.JUST_FOLLOW_VEHICLE, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.USE_PROXIMITY_FIRING_RATE, true);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_USE_FRUSTRATED_ADVANCE, false);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.CAN_USE_FRUSTRATED_ADVANCE, false);
+                SetPedCombatAttributes(this.allyPed, CombatAttributes.DISABLE_TARGET_CHANGES_DURING_VEHICLE_PURSUIT, true);
 
                 // Testing overriding task driving styles
                 SetDriveTaskDrivingStyle(this.allyPed, 4|8|32|256|512|262144|2097152|2048)
 
-                SetPedCombatAbility(this.allyPed, 2); // Set combat ability (0: poor, 1: average, 2: professional)
-                SetPedCombatRange(this.allyPed, 2); // Aggressive combat range
-                SetPedFleeAttributes(this.allyPed, 0, false); // Will not flee
+                SetPedCombatAbility(this.allyPed, 2);
+                SetPedCombatRange(this.allyPed, 0);
+                SetPedFleeAttributes(this.allyPed, 0, false);
+                SetPedCombatMovement(this.allyPed, 1);
 
                 SetPedAccuracy(this.allyPed, 95);
                 //SetEntityInvincible(this.allyPed, true);
@@ -150,7 +171,7 @@ class AllyPed {
                         TaskSetBlockingOfNonTemporaryEvents(this.allyPed, true);
                         debugChat(`Ally ${this.allyPed} is now ignoring temporary events`)
                     }
-                } else if (distanceFromPlayer < ALLY_IGNORE_EVENTS_DISTANCE-10 && this.ignoringTemporaryEvents) {
+                } else if (distanceFromPlayer < 30 && this.ignoringTemporaryEvents) {
                     this.ignoringTemporaryEvents = false;
                     TaskSetBlockingOfNonTemporaryEvents(this.allyPed, false)
                     debugChat(`Ally ${this.allyPed} is no longer ignoring temporary events`)
@@ -402,6 +423,15 @@ function cleanupLostAllies() {
 }
 
 export default function initAllyPed() {
+    AddRelationshipGroup("ALLY_GROUP");
+    SetRelationshipBetweenGroups(1, GetHashKey("ALLY_GROUP"), GetHashKey("PLAYER"))
+    //SetRelationshipBetweenGroups(1, GetHashKey("PLAYER"), GetHashKey("ALLY_GROUP"))
+
+    for (let group of config.hatedGroups) {
+        SetRelationshipBetweenGroups(4, GetHashKey('ALLY_GROUP'), GetHashKey(group))
+        SetRelationshipBetweenGroups(4, GetHashKey(group), GetHashKey('ALLY_GROUP'))
+    }
+
     RegisterCommand("killallies", (source, args) => {
         for (let ally of allies) {
             const pedCoords = GetEntityCoords(ally.allyPed, false);
@@ -474,6 +504,4 @@ export default function initAllyPed() {
 
     // Lets see if we can find leftover followers from a script restart
     cleanupLostAllies();
-
-    debugChat('skymod initialised')
 }

@@ -1,13 +1,13 @@
 export function debugChat(message) {
-    //sendChat(message);
+    sendChat(message);
 }
 
 export async function sleep(ms) {
-    return new Promise(res => setTimeout(res,ms));
+    return new Promise(res => setTimeout(res, ms));
 }
 
 export async function loadModel(modelHash) {
-    return new Promise(async (resolve,reject) => {
+    return new Promise(async (resolve, reject) => {
         if (!IsModelValid(modelHash) || !IsModelInCdimage(modelHash)) {
             reject(new Error(`Model ${modelHash} is not valid`));
         }
@@ -31,7 +31,13 @@ export async function loadModel(modelHash) {
 }
 
 export async function loadAnimationDict(animationDict) {
-    return new Promise(async (resolve,reject) => {
+    return new Promise(async (resolve, reject) => {
+        if (!DoesAnimDictExist(animationDict)) {
+            reject(new Error(`AnimationDict ${animationDict} is not valid`));
+
+            return;
+        }
+
         if (!HasAnimDictLoaded(animationDict)) {
             RequestAnimDict(animationDict)
 
@@ -42,6 +48,19 @@ export async function loadAnimationDict(animationDict) {
 
         resolve(animationDict);
     });
+}
+
+export async function runAnimation(ped, animDict, animName, duration = 0, flag = 0){
+    return new Promise(async (resolve,reject) => {
+        if (duration === 0) {
+            duration = GetAnimDuration(animDict, animName) * 1000;
+        }
+
+        TaskPlayAnim(ped, animDict, animName, 4.0, -4.0, duration, flag, 0, false, false, false);
+
+        await sleep(duration);
+        resolve();
+    })
 }
 
 export function throttle(func, wait = 250) {
@@ -57,17 +76,13 @@ export function throttle(func, wait = 250) {
     };
 }
 
-export function debounce(func, delay = 250) {
-    let timeout = null;
-
-    return function executedFunction(...args) {
-        if (timeout) {
-            clearTimeout(timeout);
-        }
-
-        timeout = setTimeout(() => {
+export function debounce(func, timeout = 300) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
             func.apply(this, args);
-        }, delay);
+        }, timeout);
     };
 }
 
@@ -79,7 +94,7 @@ export function sendChat(message) {
     })
 }
 
-export function distance3D(x1,y1,z1, x2,y2,z2) {
+export function distance3D(x1, y1, z1, x2, y2, z2) {
     return Math.abs(Math.sqrt(
         Math.pow(x2 - x1, 2) +
         Math.pow(y2 - y1, 2) +
@@ -87,21 +102,21 @@ export function distance3D(x1,y1,z1, x2,y2,z2) {
     ));
 }
 
-export function distanceBetweenEntities(e1,e2) {
+export function distanceBetweenEntities(e1, e2) {
     const coords1 = GetEntityCoords(e1);
     const coords2 = GetEntityCoords(e2);
 
-    return GetDistanceBetweenCoords(coords1[0],coords1[1],coords1[2],coords2[0],coords2[1],coords2[2], true);
+    return GetDistanceBetweenCoords(coords1[0], coords1[1], coords1[2], coords2[0], coords2[1], coords2[2], true);
 }
 
 export function getPlayerAimTarget() {
     const [aiming, targetPed] = GetEntityPlayerIsFreeAimingAt(PlayerId());
 
-    return aiming ? targetPed : false;
+    return aiming ? targetPed : 0;
 }
 
 export function isPedAnAlly(ped, ours = false) {
-    return GetPedRelationshipGroupHash(ped) === GetHashKey('PLAYER') && !IsPedAPlayer(ped) && (!ours || NetworkGetEntityOwner(ped) === PlayerId());
+    return GetPedRelationshipGroupHash(ped) === GetHashKey('ALLY_GROUP') && !IsPedAPlayer(ped) && (!ours || NetworkGetEntityOwner(ped) === PlayerId());
 }
 
 export function getFreeVehicleSeats(vehicle, forceDriverAvailable = false) {
@@ -125,7 +140,7 @@ export function getFreeVehicleSeats(vehicle, forceDriverAvailable = false) {
         }
     }
 
-    return result.filter((ele,index) => result.indexOf(ele) === index);
+    return result.filter((ele, index) => result.indexOf(ele) === index);
 }
 
 export function findNearbyFreeVehicles(ped, maxDistance = 30) {
@@ -134,7 +149,7 @@ export function findNearbyFreeVehicles(ped, maxDistance = 30) {
     let vehicles = [];
 
     for (let vehicle of allVehicles) {
-        const driverPed = GetPedInVehicleSeat(vehicle,-1);
+        const driverPed = GetPedInVehicleSeat(vehicle, -1);
 
         // Is this driver another player? Lets not select their vehicle
         if (IsPedAPlayer(driverPed) && driverPed !== PlayerPedId()) {
@@ -151,15 +166,15 @@ export function findNearbyFreeVehicles(ped, maxDistance = 30) {
             continue;
         }
 
-        const vehicleCoords = GetEntityCoords(vehicle,false)
+        const vehicleCoords = GetEntityCoords(vehicle, false)
         vehicles.push({
             entity: vehicle,
-            distance: GetDistanceBetweenCoords(coords[0],coords[1],coords[2],vehicleCoords[0],vehicleCoords[1],vehicleCoords[2], true)
+            distance: GetDistanceBetweenCoords(coords[0], coords[1], coords[2], vehicleCoords[0], vehicleCoords[1], vehicleCoords[2], true)
         });
     }
 
     vehicles = vehicles.filter((veh) => veh.distance <= maxDistance);
-    vehicles.sort((a,b) => a.distance - b.distance);
+    vehicles.sort((a, b) => a.distance - b.distance);
 
     return vehicles.map((vehicle) => vehicle.entity);
 }
@@ -201,7 +216,7 @@ export function findVehicleSpawnPointOutOfSight(playerPed, minDistance = 100.0, 
     return null;  // Return null if no suitable point is found after multiple attempts
 }
 
-export function displayTextOnScreen(text, x, y, scale = 1, colour = [255,255,255,255], timeout = 5000, centerOnCoords = false) {
+export function displayTextOnScreen(text, x, y, scale = 1, colour = [255, 255, 255, 255], timeout = 5000, centerOnCoords = false) {
     const textTicker = setTick(() => {
         SetTextFont(0); // Font type
         SetTextProportional(1);
@@ -218,4 +233,66 @@ export function displayTextOnScreen(text, x, y, scale = 1, colour = [255,255,255
     setTimeout(() => {
         clearTick(textTicker);
     }, timeout);
+}
+
+function calculateDotProductForEntities (entity1,entity2) {
+    const firstEntityCoords = GetEntityCoords(entity1, true);
+    const secondEntityCoords = GetEntityCoords(entity2, true);
+
+    const [forwardX, forwardY, forwardZ] = GetEntityForwardVector(entity1);
+
+    const toObjectX = secondEntityCoords[0] - firstEntityCoords[0];
+    const toObjectY = secondEntityCoords[1] - firstEntityCoords[1];
+    const toObjectZ = secondEntityCoords[2] - firstEntityCoords[2];
+
+    // Normalize the to-object vector
+    const length = Math.sqrt(toObjectX ** 2 + toObjectY ** 2 + toObjectZ ** 2);
+    const normalizedToObject = [toObjectX / length, toObjectY / length, toObjectZ / length];
+
+    // Calculate the dot product of the forward vector and the to-object vector
+    return forwardX * normalizedToObject[0] +
+        forwardY * normalizedToObject[1] +
+        forwardZ * normalizedToObject[2];
+}
+
+export function isEntityInFrontOfEntity(entityInFront, entityTestingAgainst) {
+    return calculateDotProductForEntities(entityTestingAgainst, entityInFront) > 0.5; // Adjust threshold if needed
+}
+
+export function isEntityBehindEntity(entityBehind, entityTestingAgainst) {
+    return calculateDotProductForEntities(entityTestingAgainst, entityBehind) < -0.5; // Adjust threshold if needed
+
+}
+
+export function calculateHeadingForEntityFaceEntity(entityToRotate, targetEntity) {
+    // Get coordinates of both entities
+    const fromCoords = GetEntityCoords(entityToRotate, true);
+    const toCoords = GetEntityCoords(targetEntity, true);
+
+    // Calculate the difference in X and Y
+    const deltaX = toCoords[0] - fromCoords[0];
+    const deltaY = toCoords[1] - fromCoords[1];
+
+    // Calculate the heading angle in degrees
+    return Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+}
+
+export function getEntityPositionInFrontOrBehind(entity, distance, isBehind = false) {
+    // Get current coordinates and facing direction (heading) of the entity
+    const [entityX, entityY, entityZ] = GetEntityCoords(entity, true);
+    let [forwardX, forwardY, forwardZ] = GetEntityForwardVector(entity);
+
+    // If we want to get the position behind the entity, reverse the direction
+    if (isBehind) {
+        forwardX = -forwardX;
+        forwardY = -forwardY;
+        forwardZ = -forwardZ;
+    }
+
+    // Calculate the new position by adding the direction vector scaled by the distance
+    const newX = entityX + (forwardX * distance);
+    const newY = entityY + (forwardY * distance);
+    const newZ = entityZ + (forwardZ * distance);
+
+    return [newX, newY, newZ];
 }
