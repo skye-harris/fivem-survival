@@ -7,6 +7,13 @@ import {displayTextOnScreen, sendChat} from "./util/util";
 import initAiTest from "./client/aiTest";
 import config from "./client/config";
 import initInteractiveObjects from "./client/interactiveObjects";
+import {addPlayerMoney, MoneySources, setPlayerCash} from "./util/Cash";
+
+// init some listeners
+addNetEventListener('skyemod:setCash', (walletCash, bankCash) => {
+    setPlayerCash(walletCash, MoneySources.Wallet);
+    setPlayerCash(bankCash, MoneySources.Bank);
+});
 
 // Start the trains running
 for (let trackIndex of [0, 3]) {
@@ -62,3 +69,6 @@ for (let group of config.hatedGroups) {
 }
 
 displayTextOnScreen("SkyMod started", 0, 0, 0.5, [255,255,255,200], 3000, false);
+
+SetWeatherTypeNow(GetHashKey("CLEAR"))
+SetRainLevel(0);

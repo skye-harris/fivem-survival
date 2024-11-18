@@ -50,16 +50,75 @@ export async function loadAnimationDict(animationDict) {
     });
 }
 
-export async function runAnimation(ped, animDict, animName, duration = 0, flag = 0){
+export async function runAnimation(ped, animDict, animName, duration = 0, flag = 0, playerCancellable = false){
     return new Promise(async (resolve,reject) => {
         if (duration === 0) {
             duration = GetAnimDuration(animDict, animName) * 1000;
         }
 
         TaskPlayAnim(ped, animDict, animName, 4.0, -4.0, duration, flag, 0, false, false, false);
+        await sleep(50)
 
-        await sleep(duration);
-        resolve();
+        if (playerCancellable) {
+            let startedAt = GetGameTimer();
+            const cancelTicker = setTick(() => {
+                if (IsControlPressed(0, 30) || IsControlPressed(0, 31) || // Movement keys (A/D or Left/Right)
+                    IsControlPressed(0, 32) || IsControlPressed(0, 33) || // Movement keys (W/S or Up/Down)
+                    IsControlPressed(0, 34) || IsControlPressed(0, 35)) { // Movement keys (Q/E or Lean)
+                    ClearPedTasks(ped); // Stop the animation
+                    clearTick(cancelTicker);
+                    reject(new Error("Player moved"));
+                } else if (!IsEntityPlayingAnim(ped, animDict, animName, 3)) {
+                    clearTick(cancelTicker);
+                    resolve();
+                }
+
+                const elapsed = GetGameTimer() - startedAt;
+                if (elapsed >= duration) {
+                    clearTick(cancelTicker);
+                    resolve();
+                }
+            });
+        } else {
+            await sleep(duration);
+            resolve();
+        }
+    })
+}
+
+export async function runAnimationLooped(ped, animDict, animName, loops = 0, playerCancellable = false){
+    return new Promise(async (resolve,reject) => {
+        let duration = GetAnimDuration(animDict, animName) * 1000;
+        if (loops) {
+            duration *= loops;
+        }
+
+        TaskPlayAnim(ped, animDict, animName, 4.0, -4.0, duration, 1, 0, false, false, false);
+
+        if (playerCancellable) {
+            let startedAt = GetGameTimer();
+            const cancelTicker = setTick(() => {
+                if (IsControlPressed(0, 30) || IsControlPressed(0, 31) || // Movement keys (A/D or Left/Right)
+                    IsControlPressed(0, 32) || IsControlPressed(0, 33) || // Movement keys (W/S or Up/Down)
+                    IsControlPressed(0, 34) || IsControlPressed(0, 35)) { // Movement keys (Q/E or Lean)
+                    ClearPedTasks(ped); // Stop the animation
+                    clearTick(cancelTicker);
+                    reject(new Error("Player moved"));
+                } else if (!IsEntityPlayingAnim(ped, animDict, animName, 3)) {
+                    clearTick(cancelTicker);
+                    resolve();
+                }
+
+                const elapsed = GetGameTimer() - startedAt;
+                if (elapsed >= duration) {
+                    clearTick(cancelTicker);
+                    resolve();
+                }
+            });
+        } else {
+            await sleep(duration);
+            resolve();
+        }
     })
 }
 
@@ -256,11 +315,11 @@ function calculateDotProductForEntities (entity1,entity2) {
 }
 
 export function isEntityInFrontOfEntity(entityInFront, entityTestingAgainst) {
-    return calculateDotProductForEntities(entityTestingAgainst, entityInFront) > 0.5; // Adjust threshold if needed
+    return calculateDotProductForEntities(entityTestingAgainst, entityInFront) > 0.1; // Adjust threshold if needed
 }
 
 export function isEntityBehindEntity(entityBehind, entityTestingAgainst) {
-    return calculateDotProductForEntities(entityTestingAgainst, entityBehind) < -0.5; // Adjust threshold if needed
+    return calculateDotProductForEntities(entityTestingAgainst, entityBehind) < -0.1; // Adjust threshold if needed
 
 }
 
@@ -274,7 +333,7 @@ export function calculateHeadingForEntityFaceEntity(entityToRotate, targetEntity
     const deltaY = toCoords[1] - fromCoords[1];
 
     // Calculate the heading angle in degrees
-    return Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+    return (Math.atan2(deltaY, deltaX) * (180 / Math.PI)) - 90;
 }
 
 export function getEntityPositionInFrontOrBehind(entity, distance, isBehind = false) {
@@ -295,4 +354,19 @@ export function getEntityPositionInFrontOrBehind(entity, distance, isBehind = fa
     const newZ = entityZ + (forwardZ * distance);
 
     return [newX, newY, newZ];
+}
+
+export function scareNearbyPeds(radius = 10) {
+    const playerPed = PlayerPedId();
+    const nearbyPeds = GetGamePool('CPed')
+        .filter((ped) => distanceBetweenEntities(playerPed, ped) <= radius);
+
+    for (let ped of nearbyPeds) {
+        TaskReactAndFleePed(ped, playerPed);
+        PlayPain(ped, randomItem([3,4,5,6,7]), 0)
+    }
+}
+
+export function randomItem(arr) {
+    return arr[Math.round(Math.random() * (arr.length-1))];
 }

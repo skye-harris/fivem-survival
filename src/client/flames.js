@@ -16,7 +16,7 @@ export default function initFlameTrail() {
     }, false);
 
 // Flame trackers ticker, throttled to every 100ms
-    setTick(throttle(() => {
+    setInterval(() => {
         if (!config.flameOn) {
             return;
         }
@@ -66,5 +66,5 @@ export default function initFlameTrail() {
                 //sendChat(err.message);
             }
         }
-    }, 100));
+    }, 100)
 }

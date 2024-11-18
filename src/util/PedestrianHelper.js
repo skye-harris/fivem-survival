@@ -1,25 +1,4 @@
 export default class PedestrianHelper {
-    isPlayerAimingAt(ped) {
-        const [aiming, targetPed] = GetEntityPlayerIsFreeAimingAt(PlayerId())
-        return aiming && targetPed === ped.handle;
-    }
-
-    distanceFromPlayer(playerPedId, ped) {
-        const playerCoords = GetEntityCoords(playerPedId, false);
-        const pedCoords = GetEntityCoords(ped.handle, false);
-
-        return GetDistanceBetweenCoords(pedCoords[0], pedCoords[1] , pedCoords[2], playerCoords[0], playerCoords[1], playerCoords[2], true)
-    }
-
-    performTaskSequence(sequenceCallback) {
-        const sequence = OpenSequenceTask(0);
-
-        sequenceCallback();
-
-        CloseSequenceTask(sequence);
-        TaskPerformSequence(this.ped.handle, sequence);
-    }
-
     static getNearbyPlayers(radius = 100, includeSelf = false) {
         const myPlayerPedId = PlayerPedId();
         const myCoords = GetEntityCoords(myPlayerPedId, true);
@@ -40,5 +19,4 @@ export default class PedestrianHelper {
 
         return nearbyPlayers;
     }
-
 }

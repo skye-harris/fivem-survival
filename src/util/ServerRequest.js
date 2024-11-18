@@ -1,20 +1,11 @@
-const callbacks = {};
-
 export async function ServerRequest(event, target, ...args) {
-    if (!callbacks.hasOwnProperty(event)) {
-        onNet(event, (...args) => {
-            if (callbacks.hasOwnProperty(event) && callbacks[event] !== null) {
-                callbacks[event](args);
-                callbacks[event] = null;
-            }
-        });
-    }
-
     return new Promise((resolve,reject) => {
-        callbacks[event] = (args) => {
+        const callback = (...args) => {
+            removeEventListener(event, callback);
             resolve(args);
         };
 
-        emitNet(event,target, args);
+        addEventListener(event, callback);
+        emitNet(event,target,args);
     });
 }
