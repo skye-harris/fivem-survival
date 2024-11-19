@@ -6,13 +6,14 @@ import initAllyPed from "./client/allyPed";
 import {displayTextOnScreen, sendChat} from "./util/util";
 import initAiTest from "./client/aiTest";
 import config from "./client/config";
-import initInteractiveObjects from "./client/interactiveObjects";
-import {addPlayerMoney, MoneySources, setPlayerCash} from "./util/Cash";
+import {MoneySources, setPlayerCash} from "./util/Cash";
+import initSpawnManager from "./client/spawnManager";
+import {initInteractiveObjects} from "./client/interactiveObjects";
 
 // init some listeners
 addNetEventListener('skyemod:setCash', (walletCash, bankCash) => {
-    setPlayerCash(walletCash, MoneySources.Wallet);
-    setPlayerCash(bankCash, MoneySources.Bank);
+    setPlayerCash(walletCash, MoneySources.Wallet, true);
+    setPlayerCash(bankCash, MoneySources.Bank, true);
 });
 
 // Start the trains running
@@ -55,6 +56,7 @@ RegisterCommand('clear', () => {
 });
 
 // Init modules
+initSpawnManager();
 initFlameTrail();
 initCopOverride();
 initPedControl();
@@ -69,6 +71,3 @@ for (let group of config.hatedGroups) {
 }
 
 displayTextOnScreen("SkyMod started", 0, 0, 0.5, [255,255,255,200], 3000, false);
-
-SetWeatherTypeNow(GetHashKey("CLEAR"))
-SetRainLevel(0);

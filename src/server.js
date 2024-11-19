@@ -1,8 +1,5 @@
-// init our db for player data
-
-//GetPlayerIdentifier(source) license:<40-char-uuid
-
 import DB from "./server/DB";
+import initBasicCash from "./server/basicCash";
 
 DB.createTable('users', [
     ['id', 'INTEGER', 'PRIMARY KEY AUTOINCREMENT'],
@@ -14,84 +11,33 @@ DB.createTable('users', [
 
 DB.createIndex('users', ['identifier'], true);
 
+initBasicCash();
+
 addNetEventListener('skyemod:settime', (args) => {
     emitNet('skyemod:settime', -1, args);
 });
 
-addNetEventListener('skyemod:spendCash', (amount) => {
-    const playerIdentifier = GetPlayerIdentifier(source).replace('license:', '');
-    const playerSource = source;
-
-    DB.select('users', ['walletCash', 'bankCash'], {identifier: playerIdentifier})
-      .then((resp) => {
-          const data = resp.pop();
-          if (data) {
-              let [walletCash, bankCash] = data.values[0];
-              if (walletCash + bankCash >= amount) {
-                  // first duduct from wallet, then from bank
-                  walletCash -= amount;
-                  if (walletCash < 0) {
-                      bankCash += walletCash;
-                      walletCash = 0;
-                  }
-
-                  DB.update('users', {walletCash: walletCash, bankCash: bankCash}, {identifier: playerIdentifier});
-                  emitNet('skyemod:spendCash', playerSource, true);
-                  emitNet('skyemod:setCash', playerSource, walletCash, bankCash);
-              } else {
-                  emitNet('skyemod:spendCash', playerSource, false);
-              }
-          } else {
-              emitNet('skyemod:spendCash', playerSource, false);
-          }
-      });
-});
-
-addNetEventListener('skyemod:bankCash', () => {
-    const playerIdentifier = GetPlayerIdentifier(source).replace('license:', '');
-    const playerSource = source;
-
-    DB.select('users', ['walletCash', 'bankCash'], {identifier: playerIdentifier})
-      .then((resp) => {
-          const data = resp.pop();
-          if (data) {
-              let [walletCash, bankCash] = data.values[0];
-              DB.update('users', {walletCash: 0, bankCash: bankCash+walletCash}, {identifier: playerIdentifier});
-
-              emitNet('skyemod:setCash', playerSource, 0, bankCash+walletCash);
-          }
-      });
-});
-
-addNetEventListener('skyemod:receivedCash', (amount) => {
-    const playerIdentifier = GetPlayerIdentifier(source).replace('license:', '');
-    const playerSource = source;
-
-    DB.select('users', ['walletCash','bankCash'], {identifier: playerIdentifier})
-      .then((resp) => {
-          const data = resp.pop();
-          if (data) {
-              let [walletCash, bankCash] = data.values[0];
-
-              DB.update('users', {walletCash: walletCash+amount}, {identifier: playerIdentifier});
-              emitNet('skyemod:setCash', playerSource, walletCash, bankCash);
-          }
-      });
+addNetEventListener('skyemod:saveModelHash', (modelHash) => {
+    const playerIdentifier = DB.playerIdentifierForSource(source);
+    DB.update('users', {lastModelHash: modelHash}, {identifier: playerIdentifier});
+    console.log(`Player model hash updated`);
 });
 
 addEventListener('playerJoining', (source) => {
+    const playerIdentifier = DB.playerIdentifierForSource(source);
     const playerSource = source;
-    const playerIdentifier = GetPlayerIdentifier(source).replace('license:', '');
+    console.log(`Player joining...`);
 
-    DB.select('users', ['walletCash', 'bankCash'], {identifier: playerIdentifier})
+    DB.select('users', ['walletCash', 'bankCash', 'lastModelHash'], {identifier: playerIdentifier})
       .then((resp) => {
           const data = resp.pop();
           if (data) {
-              const [walletCash, bankCash] = data.values[0];
-              emitNet('skyemod:setCash', playerSource, walletCash, bankCash);
+              const [walletCash, bankCash, lastModelHash] = data.values[0];
+              emitNet('skyemod:loginData', playerSource, walletCash, bankCash, lastModelHash);
           } else {
-              DB.insert('users', {identifier: playerIdentifier, walletCash: 0, bankCash: 0});
-              emitNet('skyemod:setCash', playerSource, 0, 0);
+              DB.insert('users', {identifier: playerIdentifier, walletCash: 0, bankCash: 0, lastModelHash: 0});
+              emitNet('skyemod:loginData', playerSource, 0, 0, 0);
           }
+          console.log(`Sent login data to player`);
       });
 });

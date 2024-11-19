@@ -12,35 +12,46 @@ export function getPlayerCash(whereFrom = MoneySources.Wallet) {
 }
 
 const displayCashTimeout = [0,0];
-export function setPlayerCash(amount, whereTo = MoneySources.Wallet) {
+export function setPlayerCash(amount, whereTo = MoneySources.Wallet, displayCashOnScreen = false) {
     const index = whereTo === MoneySources.Wallet ? 0 : 1;
+    const didCashChange = getPlayerCash(whereTo) !== amount;
+    if (!didCashChange) {
+        return;
+    }
+
     clearTimeout(displayCashTimeout[index]);
 
-    switch (whereTo) {
-        case MoneySources.Wallet:
-            SetMultiplayerWalletCash();
-            break;
+    if (displayCashOnScreen) {
+        DisplayCash(true);
+        switch (whereTo) {
+            case MoneySources.Wallet:
+                SetMultiplayerWalletCash();
+                break;
 
-        case MoneySources.Bank:
-            SetMultiplayerBankCash();
-            break;
+            case MoneySources.Bank:
+                SetMultiplayerBankCash();
+                break;
+        }
     }
 
     StatSetInt(whereTo, Math.max(0, amount), true);
 
-    displayCashTimeout[index] = setTimeout(() => {
-        displayCashTimeout[index] = 0;
+    if (displayCashOnScreen) {
+        displayCashTimeout[index] = setTimeout(() => {
+            displayCashTimeout[index] = 0;
 
-        switch (whereTo) {
-            case MoneySources.Wallet:
-                RemoveMultiplayerWalletCash();
-                break;
+            switch (whereTo) {
+                case MoneySources.Wallet:
+                    RemoveMultiplayerWalletCash();
+                    break;
 
-            case MoneySources.Bank:
-                RemoveMultiplayerBankCash();
-                break;
-        }
-    }, 3000);
+                case MoneySources.Bank:
+                    RemoveMultiplayerBankCash();
+                    break;
+            }
+        }, 3000);
+    }
+    DisplayCash(false);
 }
 
 export function addPlayerMoney(amount, whereTo = MoneySources.Wallet) {

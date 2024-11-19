@@ -11,6 +11,10 @@ AddEventHandler('u5_sqlite:lua:callbackResult', (callbackId, results) => {
 });
 
 const DB = {
+    playerIdentifierForSource(source) {
+        return GetPlayerIdentifier(source).replace('license:', '');
+    },
+
     select: async (table, columns = ['*'], where, rawWhere) => {
         return new Promise((resolve, reject) => {
             let cbId = callbackId;
