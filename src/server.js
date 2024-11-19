@@ -1,5 +1,6 @@
 import DB from "./server/DB";
 import initBasicCash from "./server/basicCash";
+import initUnionDepositoryHeist from "./server/Heist/UnionDepository";
 
 DB.createTable('users', [
     ['id', 'INTEGER', 'PRIMARY KEY AUTOINCREMENT'],
@@ -12,6 +13,7 @@ DB.createTable('users', [
 DB.createIndex('users', ['identifier'], true);
 
 initBasicCash();
+initUnionDepositoryHeist();
 
 addNetEventListener('skyemod:settime', (args) => {
     emitNet('skyemod:settime', -1, args);

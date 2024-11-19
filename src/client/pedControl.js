@@ -52,7 +52,7 @@ export default function initPedControl() {
     }, false);
 
     // Hostile Peds ticker, throttled to every 2sec
-    setTick(throttle(() => {
+    setInterval(() => {
         if (!config.pedsHostile) {
             return;
         }
@@ -141,5 +141,5 @@ export default function initPedControl() {
                 TaskCombatPed(ped, player, 0, 16);
             }
         }
-    }, 2000));
+    }, 2000);
 }

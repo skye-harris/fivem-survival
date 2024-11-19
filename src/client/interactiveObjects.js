@@ -1,9 +1,8 @@
 import {
     displayTextOnScreen,
-    distanceBetweenEntities,
+    distanceBetweenEntities, drawTextThisFrame,
     isEntityBehindEntity,
-    isEntityInFrontOfEntity, sendChat,
-    throttle
+    isEntityInFrontOfEntity,
 } from "../util/util"
 import {InteractionDirection} from "./ObjectInteractions/InteractiveObject";
 import CashRegister from "./ObjectInteractions/CashRegister";
@@ -39,17 +38,9 @@ Object.keys(ObjectHandlers)
         delete (ObjectHandlers[key]);
     });
 
-function drawTextThisFrame(x, y, text, scale = 0.2, center = false, colour = [255, 255, 255, 255]) {
-    SetTextFont(0); // Font type
-    SetTextProportional(1);
-    SetTextScale(scale, scale);
-    SetTextColour(colour[0], colour[1], colour[2], colour[3]); // RGBA color
-    SetTextDropShadow();
-    SetTextOutline();
-    SetTextEntry("STRING");
-    SetTextCentre(center);
-    AddTextComponentString(text);
-    DrawText(x, y);
+export function registerInteractableObject(interactableObject) {
+    interactiveObjects = interactiveObjects.filter((obj) => obj.entity !== interactableObject.entity);
+    interactiveObjects.push(interactableObject);
 }
 
 export function initInteractiveObjects() {
@@ -125,26 +116,16 @@ export function initInteractiveObjects() {
         }
     });
 
-    // addEventListener('interactions:register', (handler) => {
-    //     interactiveObjects = interactiveObjects.filter((obj) => obj.entity !== handler.entity);
-    //     interactiveObjects.push(handler);
-    // });
-
-    setTick(throttle(() => {
+    setInterval(() => {
         const objects = GetGamePool('CObject');
 
         for (let entity of objects) {
             const modelHash = GetEntityModel(entity);
             if (ObjectHandlers.hasOwnProperty(modelHash.toString()) && !interactiveObjects.find((obj) => obj.entity === entity)) {
-                try {
-                    const objClass = ObjectHandlers[modelHash];
+                const objClass = ObjectHandlers[modelHash];
 
-                    interactiveObjects = interactiveObjects.filter((obj) => obj.entity !== entity);
-                    interactiveObjects.push(new objClass(entity));
-                } catch (err) {
-                    sendChat(err)
-                }
+                registerInteractableObject(new objClass(entity));
             }
         }
-    }, 5000));
+    }, 5000);
 }

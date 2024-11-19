@@ -41,25 +41,7 @@ export default function initSpawnManager() {
             z: 130.461,
         };
 
-        if (!isFirstSpawn) {
-            let distanceEnd = 200;
-            let iterations = 10;
-
-            while (iterations > 0) {
-                const spawnPoint = findSpawnPointNearby(100, distanceEnd);
-
-                if (spawnPoint) {
-                    spawnArgs.x = spawnPoint[0];
-                    spawnArgs.y = spawnPoint[1];
-                    spawnArgs.z = spawnPoint[2];
-
-                    break;
-                }
-
-                distanceEnd+=100;
-                iterations--;
-            }
-        } else {
+        if (isFirstSpawn) {
             // delay a couple seconds for data to come in, but dont wait forever
             await sleep(5000);
 

@@ -267,18 +267,22 @@ export function findVehicleSpawnPointOutOfSight(playerPed, minDistance = 100.0, 
     return null;  // Return null if no suitable point is found after multiple attempts
 }
 
+export function drawTextThisFrame(x, y, text, scale = 0.2, center = false, colour = [255, 255, 255, 255]) {
+    SetTextFont(0); // Font type
+    SetTextProportional(1);
+    SetTextScale(scale, scale);
+    SetTextColour(colour[0], colour[1], colour[2], colour[3]); // RGBA color
+    SetTextDropShadow();
+    SetTextOutline();
+    SetTextEntry("STRING");
+    SetTextCentre(center);
+    AddTextComponentString(text);
+    DrawText(x, y);
+}
+
 export function displayTextOnScreen(text, x, y, scale = 1, colour = [255, 255, 255, 255], timeout = 5000, centerOnCoords = false) {
     const textTicker = setTick(() => {
-        SetTextFont(0); // Font type
-        SetTextProportional(1);
-        SetTextScale(scale, scale);
-        SetTextColour(colour[0], colour[1], colour[2], colour[3]); // RGBA color
-        SetTextDropShadow();
-        SetTextOutline();
-        SetTextEntry("STRING");
-        SetTextCentre(centerOnCoords);
-        AddTextComponentString(Array.isArray(text) ? text.join("\n") : text);
-        DrawText(x, y);
+        drawTextThisFrame(x,y,text,scale,centerOnCoords,colour);
     });
 
     setTimeout(() => {
@@ -361,4 +365,23 @@ export function scareNearbyPeds(radius = 10) {
 
 export function randomItem(arr) {
     return arr[Math.round(Math.random() * (arr.length-1))];
+}
+
+export function getClosestObjectOfModel(model, x, y, z) {
+    const distObjects = GetGamePool('CObject').filter((entity) => {
+        const modelHash = GetEntityModel(entity);
+        return modelHash === model;
+    }).map((entity)  => {
+        const coords = GetEntityCoords(entity,false);
+        const distance = Vdist2(coords[0],coords[1],coords[2],x,y,z);
+
+        return {
+            distance: distance,
+            entity: entity
+        };
+    });
+
+    distObjects.sort((a, b) => a.distance - b.distance);
+
+    return distObjects.length ? distObjects[0] : 0;
 }
