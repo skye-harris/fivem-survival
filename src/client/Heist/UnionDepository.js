@@ -5,8 +5,8 @@ import {ClientRequest} from "../../util/ClientRequest";
 const EntranceLocation = [9.9, -667.9, 32.45, 0];
 const ExitLocation = [0.9, -702.8, 15.15, 334];
 
-const ExtinguiserHash = -666581633;
-const Extinguisers = [
+const ExtinguisherHash = -666581633;
+const Extinguishers = [
     [9.98, -706.03, 15.36],
     [-12.5, -697.76, 15.36],
     [0.42, -693.13, 15.36],
@@ -101,21 +101,23 @@ class Heist {
             }, 1000);
 
             // setup our extinguishers
-            for (let coords of Extinguisers) {
-                let result = getClosestObjectOfModel(ExtinguiserHash, coords[0], coords[1], coords[2]);
+            for (let coords of Extinguishers) {
+                let result = getClosestObjectOfModel(ExtinguisherHash, coords[0], coords[1], coords[2]);
                 let entity;
 
                 if (result && result.distance < 1) {
                     entity = result.entity;
                     SetEntityAsMissionEntity(entity, true, true)
+
                     SetEntityCoords(entity, coords[0], coords[1], coords[2], true, true, true, false);
                     SetEntityRotation(entity, 0, 0, 0, 0, true);
                     SetEntityVisible(entity, true, true);
                 } else {
-                    await loadModel(ExtinguiserHash);
-                    entity = CreateObject(ExtinguiserHash, coords[0], coords[1], coords[2], true, true, true);
+                    await loadModel(ExtinguisherHash);
+                    entity = CreateObject(ExtinguisherHash, coords[0], coords[1], coords[2], true, true, true);
                 }
 
+                NetworkRegisterEntityAsNetworked(entity);
                 SetEntityCanBeDamaged(entity, true);
                 SetEntityInvincible(entity, false)
                 SetEntityHealth(entity, 10);
@@ -127,7 +129,7 @@ class Heist {
             sendChat('stage 1 active')
         }).then(() => {
             return this.exitStage();
-        })
+        });
     }
 
     async exitStage() {
