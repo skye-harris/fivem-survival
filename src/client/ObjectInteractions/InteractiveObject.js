@@ -10,6 +10,7 @@ export class InteractiveObject {
         this.textOffset = textOffset;
         this.direction = useDirection;
         this.onCooldownUntil = 0;
+        this.maxUseDistance = 1.5;
     }
 
     async onUse() {

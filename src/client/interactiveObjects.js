@@ -1,6 +1,6 @@
 import {
     displayTextOnScreen,
-    distanceBetweenEntities, drawTextThisFrame,
+    distanceBetweenEntities, drawTextThisFrame, getDistanceToObjectEdge, getObjectCenter,
     isEntityBehindEntity,
     isEntityInFrontOfEntity,
 } from "../util/util"
@@ -8,12 +8,10 @@ import {InteractionDirection} from "./ObjectInteractions/InteractiveObject";
 import CashRegister from "./ObjectInteractions/CashRegister";
 import TellerMachine from "./ObjectInteractions/TellerMachine";
 import VendingMachine from "./ObjectInteractions/VendingMachine";
-
-const MAX_USE_DISTANCE = 1.5;
-const MAX_TEXT_DRAW_DISTANCE = 3;
+import Dumpster from "./ObjectInteractions/Dumpster";
+import SmallBin from "./ObjectInteractions/SmallBin";
 
 let interactiveObjects = [];
-
 let ObjectHandlers = {
     // Cash registers
     'prop_till_01': CashRegister,
@@ -28,6 +26,56 @@ let ObjectHandlers = {
     'prop_atm_02': TellerMachine,
     'prop_atm_03': TellerMachine,
     'prop_fleeca_atm': TellerMachine,
+
+    // Dumpsters
+    'prop_dumpster_3a': Dumpster,
+    'prop_dumpster_4a': Dumpster,
+    'prop_dumpster_4b': Dumpster,
+    'prop_cs_dumpster_01a': Dumpster,
+    'p_dumpster_t': Dumpster,
+    'prop_dumpster_01a': Dumpster,
+    'prop_dumpster_02a': Dumpster,
+    'prop_dumpster_02b': Dumpster,
+    'prop_bin_14a': Dumpster,
+    'prop_bin_13a': Dumpster,
+    'prop_bin_14b': Dumpster,
+
+    // Bins
+    'prop_bin_07b': SmallBin,
+    'prop_bin_beach_01d': SmallBin,
+    'prop_bin_01a': SmallBin,
+    'prop_bin_01b': SmallBin,
+    'prop_recyclebin_04_a': SmallBin,
+    'prop_recyclebin_04_b': SmallBin,
+    'prop_bin_beach_01a': SmallBin,
+    'prop_recyclebin_02_c': SmallBin,
+    'prop_bin_delpiero_b': SmallBin,
+    'prop_bin_delpiero_c': SmallBin,
+    'zprop_bin_01a_old': SmallBin,
+    'prop_recyclebin_03_a': SmallBin,
+    'prop_bin_07c': SmallBin,
+    'prop_bin_01c': SmallBin,
+    'prop_bin_10b': SmallBin,
+    'prop_bin_10a': SmallBin,
+    'prop_bin_11a': SmallBin,
+    'prop_bin_06a': SmallBin,
+    'prop_bin_06b': SmallBin,
+    'prop_bin_07d': SmallBin,
+    'prop_bin_11b': SmallBin,
+    'prop_bin_04a': SmallBin,
+    'prop_bin_04b': SmallBin,
+    'prop_recyclebin_02b': SmallBin,
+    'prop_bin_delpiero': SmallBin,
+    'prop_bin_09a': SmallBin,
+    'prop_bin_08a': SmallBin,
+    'prop_bin_02a': SmallBin,
+    'prop_recyclebin_02_d': SmallBin,
+    'prop_bin_08open': SmallBin,
+    'prop_bin_12a': SmallBin,
+    'prop_recyclebin_02a': SmallBin,
+    'prop_bin_05a': SmallBin,
+    'prop_bin_07a': SmallBin,
+    'prop_recyclebin_01a': SmallBin,
 };
 
 Object.keys(ObjectHandlers)
@@ -54,11 +102,11 @@ export function initInteractiveObjects() {
 
             let nearbyObject = interactiveObjects.map(
                 (obj) => {
-                    obj.distance = distanceBetweenEntities(PlayerPedId(), obj.entity);
+                    obj.distance = getDistanceToObjectEdge(obj.entity);//distanceBetweenEntities(PlayerPedId(), obj.entity);
                     return obj;
                 })
                 .filter((obj) => {
-                    return obj.distance <= MAX_TEXT_DRAW_DISTANCE && IsEntityVisible(obj.entity) && HasEntityClearLosToEntity(PlayerPedId(), obj.entity, 16);
+                    return obj.distance <= obj.maxUseDistance && IsEntityVisible(obj.entity) && HasEntityClearLosToEntity(PlayerPedId(), obj.entity, 16);
                 })
                 .sort((a, b) => {
                     return a.distance - b.distance;
@@ -77,7 +125,8 @@ export function initInteractiveObjects() {
                 });
 
             if (nearbyObject) {
-                const entityCoords = GetEntityCoords(nearbyObject.entity, false);
+                //const entityCoords = GetEntityCoords(nearbyObject.entity, false);
+                const entityCoords = getObjectCenter(nearbyObject.entity);
                 const [onScreen, screenX, screenY] = GetScreenCoordFromWorldCoord(
                     entityCoords[0] + nearbyObject.textOffset[0],
                     entityCoords[1] + nearbyObject.textOffset[1],
@@ -93,19 +142,17 @@ export function initInteractiveObjects() {
                     // Draw text above the entity
                     drawTextThisFrame(screenX, screenY, text, 0.3, true);
 
-                    if (IsControlJustPressed(0, 51)) {
-                        if (nearbyObject.distance <= MAX_USE_DISTANCE) {
-                            isInteracting = true;
+                    if (IsControlJustPressed(0, 51) && nearbyObject.canUse()) {
+                        isInteracting = true;
 
-                            // Run our callback and then cleanup
-                            nearbyObject.onUse(nearbyObject)
-                                .catch((err) => {
-                                    displayTextOnScreen(err, 0.5, 0.3, 0.4, [255, 64, 64, 255], 2000, true);
-                                })
-                                .finally(() => {
-                                    isInteracting = false;
-                                });
-                        }
+                        // Run our callback and then cleanup
+                        nearbyObject.onUse(nearbyObject)
+                            .catch((err) => {
+                                displayTextOnScreen(err, 0.5, 0.3, 0.4, [255, 64, 64, 255], 2000, true);
+                            })
+                            .finally(() => {
+                                isInteracting = false;
+                            });
                     }
                 }
             } else {

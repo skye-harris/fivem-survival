@@ -93,7 +93,7 @@ export async function runAnimationLooped(ped, animDict, animName, loops = 0, pla
             duration *= loops;
         }
 
-        TaskPlayAnim(ped, animDict, animName, 4.0, -4.0, duration, 1, 0, false, false, false);
+        TaskPlayAnim(ped, animDict, animName, 2.0, -2.0, duration, 1, 0, false, false, false);
 
         if (playerCancellable) {
             let startedAt = GetGameTimer();
@@ -384,4 +384,132 @@ export function getClosestObjectOfModel(model, x, y, z) {
     distObjects.sort((a, b) => a.distance - b.distance);
 
     return distObjects.length ? distObjects[0] : 0;
+}
+
+export function getDistanceToObjectEdge(object) {
+    if (!DoesEntityExist(object)) return null;
+
+    const playerPed = PlayerPedId();
+    const playerCoords = GetEntityCoords(playerPed, true);
+    const objectCoords = GetEntityCoords(object, true);
+    const objectRotation = GetEntityRotation(object, 2); // Rotation in degrees
+    const objectModel = GetEntityModel(object);
+
+    let vehicleDimensions = GetModelDimensions(objectModel);
+    let minDim = vehicleDimensions[0];
+    let maxDim = vehicleDimensions[1];
+
+    // Translate player position to object's local space
+    const relativePlayerCoords = [
+        playerCoords[0] - objectCoords[0],
+        playerCoords[1] - objectCoords[1],
+        playerCoords[2] - objectCoords[2],
+    ];
+
+    const localPlayerCoords = applyInverseRotation(relativePlayerCoords, objectRotation);
+
+    // Clamp the player's position to the bounding box edges
+    const clampedCoords = [
+        Math.max(minDim[0], Math.min(localPlayerCoords[0], maxDim[0])),
+        Math.max(minDim[1], Math.min(localPlayerCoords[1], maxDim[1])),
+        Math.max(minDim[2], Math.min(localPlayerCoords[2], maxDim[2])),
+    ];
+
+    // Calculate the distance from the player's local position to the clamped position
+    const dx = localPlayerCoords[0] - clampedCoords[0];
+    const dy = localPlayerCoords[1] - clampedCoords[1];
+    const dz = localPlayerCoords[2] - clampedCoords[2];
+
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+export function applyInverseRotation(point, rotation) {
+    const radX = -rotation[0] * (Math.PI / 180);
+    const radY = -rotation[1] * (Math.PI / 180);
+    const radZ = -rotation[2] * (Math.PI / 180);
+
+    const cosX = Math.cos(radX), sinX = Math.sin(radX);
+    const cosY = Math.cos(radY), sinY = Math.sin(radY);
+    const cosZ = Math.cos(radZ), sinZ = Math.sin(radZ);
+
+    let [x, y, z] = point;
+
+    // Reverse rotate around X-axis
+    let tempY = cosX * y + sinX * z;
+    let tempZ = cosX * z - sinX * y;
+    y = tempY;
+    z = tempZ;
+
+    // Reverse rotate around Y-axis
+    let tempX = cosY * x - sinY * z;
+    z = cosY * z + sinY * x;
+    x = tempX;
+
+    // Reverse rotate around Z-axis
+    tempX = cosZ * x + sinZ * y;
+    y = cosZ * y - sinZ * x;
+    x = tempX;
+
+    return [x, y, z];
+}
+
+export function applyRotation(point, rotation) {
+    const radX = rotation[0] * (Math.PI / 180);
+    const radY = rotation[1] * (Math.PI / 180);
+    const radZ = rotation[2] * (Math.PI / 180);
+
+    const cosX = Math.cos(radX), sinX = Math.sin(radX);
+    const cosY = Math.cos(radY), sinY = Math.sin(radY);
+    const cosZ = Math.cos(radZ), sinZ = Math.sin(radZ);
+
+    let [x, y, z] = point;
+
+    // Rotate around X-axis
+    let tempY = cosX * y - sinX * z;
+    let tempZ = sinX * y + cosX * z;
+    y = tempY;
+    z = tempZ;
+
+    // Rotate around Y-axis
+    let tempX = cosY * x + sinY * z;
+    z = cosY * z - sinY * x;
+    x = tempX;
+
+    // Rotate around Z-axis
+    tempX = cosZ * x - sinZ * y;
+    y = sinZ * x + cosZ * y;
+    x = tempX;
+
+    return [x, y, z];
+}
+
+export function getObjectCenter(object) {
+    if (!DoesEntityExist(object)) return null;
+
+    const objectCoords = GetEntityCoords(object, true); // Object's world position
+    const objectRotation = GetEntityRotation(object, 2); // Object's rotation in degrees
+    const objectModel = GetEntityModel(object);
+
+    let vehicleDimensions = GetModelDimensions(objectModel);
+    let minDim = vehicleDimensions[0];
+    let maxDim = vehicleDimensions[1];
+
+    // Calculate the center in the object's local space
+    const localCenter = [
+        (minDim[0] + maxDim[0]) / 2,
+        (minDim[1] + maxDim[1]) / 2,
+        (minDim[2] + maxDim[2]) / 2,
+    ];
+
+    // Rotate the center to world space
+    const rotatedCenter = applyRotation(localCenter, objectRotation);
+
+    // Translate the rotated center to the object's world position
+    const worldCenter = [
+        objectCoords[0] + rotatedCenter[0],
+        objectCoords[1] + rotatedCenter[1],
+        objectCoords[2] + rotatedCenter[2],
+    ];
+
+    return worldCenter;
 }
