@@ -23,6 +23,19 @@ function findSpawnPointNearby(minDistance = 100.0, maxDistance = 200.0) {
     return null;  // Return null if no suitable point is found after multiple attempts
 }
 
+const SpawnLocations = {
+    Amphitheatre: {
+        x: 686.2,
+        y: 577.9,
+        z: 130.4,
+    },
+    CityConstructionSite: {
+        x: 29.9,
+        y: -428.8,
+        z: 40,
+    },
+}
+
 export default function initSpawnManager() {
     let isFirstSpawn = true;
     let playerModelHash = GetEntityModel(PlayerPedId());
@@ -35,11 +48,7 @@ export default function initSpawnManager() {
     });
 
     exports.spawnmanager.setAutoSpawnCallback(async () => {
-        const spawnArgs = {
-            x: 686.245,
-            y: 577.950,
-            z: 130.461,
-        };
+        const spawnArgs = SpawnLocations.CityConstructionSite;
 
         if (isFirstSpawn) {
             // delay a couple seconds for data to come in, but dont wait forever
@@ -51,7 +60,7 @@ export default function initSpawnManager() {
         }
 
         exports.spawnmanager.spawnPlayer(spawnArgs, () => {
-            GiveWeaponToPed(PlayerPedId(), WeaponHash.CombatPistol, 100, false, true);
+            //GiveWeaponToPed(PlayerPedId(), WeaponHash.CombatPistol, 100, false, true);
         });
     });
 
